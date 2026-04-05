@@ -1,10 +1,13 @@
 {
-  "name": "reverse-engineer",
+  "name": "@jonusnattapong/reverse-engineer",
   "version": "1.0.1",
   "description": "GitHub path reverse engineering app with GitHub API and OpenAI integration",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/JonusNattapong/Reverse-Engineer.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "bugs": {
     "url": "https://github.com/JonusNattapong/Reverse-Engineer/issues"
