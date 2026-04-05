@@ -122,9 +122,9 @@ function printBanner() {
   const claudeOrange = g("#D97757", "#FCAB64", "#D97757");
   console.log(claudeOrange.multiline(LOGO_TEXT));
   console.log(
-    chalk.hex("#D97757").bold(
-      `   ${figures.star} Welcome to ${APP_NAME} ${figures.star}`,
-    ),
+    chalk
+      .hex("#D97757")
+      .bold(`   ${figures.star} Welcome to ${APP_NAME} ${figures.star}`),
   );
   console.log(
     chalk.dim("   Designed for Deep Repo Analysis and Engineering Insights\n"),
@@ -169,19 +169,29 @@ async function fetchJson(url, options) {
 function divider(step, title, color = "blue", total = 4) {
   const stepText = chalk.bold(` [STEP ${step}/${total}] `);
   const titleText = chalk[color].bold(` ${figures.pointerSmall} ${title} `);
-  const line = chalk.dim("─".repeat(Math.max(0, (process.stdout.columns || 80) - title.length - stepText.length - 15)));
+  const line = chalk.dim(
+    "─".repeat(
+      Math.max(
+        0,
+        (process.stdout.columns || 80) - title.length - stepText.length - 15,
+      ),
+    ),
+  );
   console.log(`\n${chalk.bgCyan.black(stepText)}${titleText}${line}\n`);
 }
 
 function summaryBox(title, content, color = "cyan") {
-  console.log("\n" + boxen(chalk.white(content), {
-    title: chalk[color].bold(title),
-    titleAlignment: "left",
-    padding: { left: 1, right: 1, top: 0, bottom: 0 },
-    borderColor: color,
-    borderStyle: "round",
-    margin: { left: 2 }
-  }));
+  console.log(
+    "\n" +
+      boxen(chalk.white(content), {
+        title: chalk[color].bold(title),
+        titleAlignment: "left",
+        padding: { left: 1, right: 1, top: 0, bottom: 0 },
+        borderColor: color,
+        borderStyle: "round",
+        margin: { left: 2 },
+      }),
+  );
 }
 
 function renderMetadata(metadata) {
@@ -262,7 +272,8 @@ function renderAnalysis(analysis) {
 }
 
 async function handleOutputAction(content, metadata, health, githubContext) {
-  const outputDir = path.join(__dirname, "..", "output");
+  const defaultOutputDir =
+    process.env.DEFAULT_OUTPUT_DIR || path.join(__dirname, "..", "output");
 
   const { action } = await inquirer.prompt([
     {
@@ -271,9 +282,18 @@ async function handleOutputAction(content, metadata, health, githubContext) {
       message: "What would you like to do with the result?",
       choices: [
         { name: `${figures.pointer || ">>"} Copy to Clipboard`, value: "copy" },
-        { name: `${figures.folder || "[F]"} Export as Markdown (.md)`, value: "save-md" },
-        { name: `${figures.folder || "[F]"} Export as Plain Text (.txt)`, value: "save-txt" },
-        { name: `${figures.folder || "[F]"} Export as JSON (.json)`, value: "save-json" },
+        {
+          name: `${figures.folder || "[F]"} Export as Markdown (.md)`,
+          value: "save-md",
+        },
+        {
+          name: `${figures.folder || "[F]"} Export as Plain Text (.txt)`,
+          value: "save-txt",
+        },
+        {
+          name: `${figures.folder || "[F]"} Export as JSON (.json)`,
+          value: "save-json",
+        },
         {
           name: `${figures.settings || "[S]"} Change Provider/Settings`,
           value: "config",
@@ -294,14 +314,36 @@ async function handleOutputAction(content, metadata, health, githubContext) {
       const proc = exec(clipCmd);
       proc.stdin.write(content);
       proc.stdin.end();
-      console.log(chalk.green(`\n${figures.tick} Content copied to clipboard!`));
+      console.log(
+        chalk.green(`\n${figures.tick} Content copied to clipboard!`),
+      );
     } catch {
-      console.log(chalk.red(`\n${figures.cross} Clipboard not available on this platform. Use export instead.`));
+      console.log(
+        chalk.red(
+          `\n${figures.cross} Clipboard not available on this platform. Use export instead.`,
+        ),
+      );
     }
     return handleOutputAction(content, metadata, health, githubContext);
   }
 
   if (action.startsWith("save-")) {
+    const { customPath } = await inquirer.prompt([
+      {
+        type: "input",
+        name: "customPath",
+        message: "Enter output directory path:",
+        default: defaultOutputDir,
+      },
+    ]);
+
+    if (customPath !== process.env.DEFAULT_OUTPUT_DIR) {
+      updateEnv("DEFAULT_OUTPUT_DIR", customPath);
+      process.env.DEFAULT_OUTPUT_DIR = customPath;
+    }
+
+    const outputDir = path.resolve(customPath);
+
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
@@ -334,17 +376,21 @@ async function handleOutputAction(content, metadata, health, githubContext) {
       }
       case "json": {
         filename = `${baseName}-analysis.json`;
-        fileContent = JSON.stringify({
-          meta: {
-            repo: `${metadata.owner}/${metadata.repo}`,
-            branch: metadata.branch,
-            type: metadata.type,
-            path: metadata.path,
-            url: metadata.url,
-            exportedAt: new Date().toISOString(),
+        fileContent = JSON.stringify(
+          {
+            meta: {
+              repo: `${metadata.owner}/${metadata.repo}`,
+              branch: metadata.branch,
+              type: metadata.type,
+              path: metadata.path,
+              url: metadata.url,
+              exportedAt: new Date().toISOString(),
+            },
+            analysis: content,
           },
-          analysis: content,
-        }, null, 2);
+          null,
+          2,
+        );
         break;
       }
     }
@@ -352,7 +398,7 @@ async function handleOutputAction(content, metadata, health, githubContext) {
     const fullPath = path.join(outputDir, filename);
     fs.writeFileSync(fullPath, fileContent, "utf8");
     console.log(
-      chalk.green(`\n${figures.tick} Saved to: ${chalk.bold(`output/${filename}`)}`),
+      chalk.green(`\n${figures.tick} Saved to: ${chalk.bold(fullPath)}`),
     );
     return handleOutputAction(content, metadata, health, githubContext);
   }
@@ -498,7 +544,15 @@ async function promptForMissing(args, health = {}) {
       type: "list",
       name: "outputStyle",
       message: "Choose analysis style:",
-      choices: ["summary", "deep", "step-by-step", "refactoring", "security", "perfection", "blueprint"],
+      choices: [
+        "summary",
+        "deep",
+        "step-by-step",
+        "refactoring",
+        "security",
+        "perfection",
+        "blueprint",
+      ],
       default: DEFAULT_STYLE,
     });
   }
@@ -538,7 +592,11 @@ async function main() {
   try {
     health = await fetchJson(`${args.baseUrl}/api/health`);
   } catch (e) {
-    console.log(chalk.yellow(`${figures.warning} Could not reach API server at ${args.baseUrl}. Some features may not work.`));
+    console.log(
+      chalk.yellow(
+        `${figures.warning} Could not reach API server at ${args.baseUrl}. Some features may not work.`,
+      ),
+    );
   }
 
   const finalArgs = await promptForMissing(args, health);
@@ -551,7 +609,7 @@ async function main() {
   try {
     divider(1, "Handshake & Engine Check", "blue");
     const serverHealth = await fetchJson(`${finalArgs.baseUrl}/api/health`);
-    
+
     const serverInfo = [
       `${chalk.cyan("API Gateway")}   : ${chalk.white(finalArgs.baseUrl)}`,
       `${chalk.cyan("AI Gateway")}    : ${serverHealth.ok ? chalk.green("CONNECTED") : chalk.red("DISCONNECTED")}`,
@@ -627,17 +685,22 @@ async function main() {
         provider: selectedProvider,
         model: finalArgs.model || "",
         extraContext: finalArgs.extraContext || "",
-        stream: shouldStream
+        stream: shouldStream,
       }),
     });
 
-    if (!response.ok) throw new Error(`Analysis connection failed: ${response.status}`);
+    if (!response.ok)
+      throw new Error(`Analysis connection failed: ${response.status}`);
 
     let finalContent = "";
 
     if (shouldStream) {
-      analysisSpinner.succeed(chalk.green("Intelligence synthesis handshake successful. Receiving stream..."));
-      process.stdout.write("\n"); 
+      analysisSpinner.succeed(
+        chalk.green(
+          "Intelligence synthesis handshake successful. Receiving stream...",
+        ),
+      );
+      process.stdout.write("\n");
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -666,7 +729,8 @@ async function main() {
         }
       }
     } else {
-      analysisSpinner.text = "Engaging long-form architectural synthesis... This may take up to 2 minutes.";
+      analysisSpinner.text =
+        "Engaging long-form architectural synthesis... This may take up to 2 minutes.";
       const data = await response.json();
       if (data.error) throw new Error(data.error);
       finalContent = data.text || "";
@@ -678,14 +742,29 @@ async function main() {
     process.stdout.write("\n\n"); // End of stream spacing
 
     if (finalArgs.json) {
-      console.log(JSON.stringify({ githubContext, analysis: { text: finalContent } }, null, 2));
+      console.log(
+        JSON.stringify(
+          { githubContext, analysis: { text: finalContent } },
+          null,
+          2,
+        ),
+      );
       return;
     }
 
     divider(4, "Insight Delivery & Export", "green");
-    await handleOutputAction(finalContent, githubContext.metadata, serverHealth, githubContext);
-    
-    summaryBox("MISSION STATUS", `${figures.tick} REVERSE ENGINEERING SUCCESSFUL\n${figures.star} Insights ready for engineering team.`, "green");
+    await handleOutputAction(
+      finalContent,
+      githubContext.metadata,
+      serverHealth,
+      githubContext,
+    );
+
+    summaryBox(
+      "MISSION STATUS",
+      `${figures.tick} REVERSE ENGINEERING SUCCESSFUL\n${figures.star} Insights ready for engineering team.`,
+      "green",
+    );
   } catch (error) {
     console.error(
       chalk.red(`\n${figures.warning} Critical Error: ${error.message}`),

@@ -1,10 +1,13 @@
 {
   "name": "blueprompt",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "AI-powered codebase architecture and reverse engineering CLI",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/JonusNattapong/Reverse-Engineer.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "bugs": {
     "url": "https://github.com/JonusNattapong/Reverse-Engineer/issues"
@@ -25,7 +28,13 @@
     "github",
     "blueprompt",
     "reverse-engineering",
+    "ai",
     "openai",
+    "gemini",
+    "anthropic",
+    "groq",
+    "codexray",
+    "bluecode",
     "express"
   ],
   "license": "MIT",
