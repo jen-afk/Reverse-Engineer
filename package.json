@@ -1,5 +1,5 @@
 {
-  "name": "bluecode",
+  "name": "blueprompt",
   "version": "1.0.1",
   "description": "AI-powered codebase architecture and reverse engineering CLI",
   "repository": {
@@ -12,7 +12,7 @@
   "homepage": "https://github.com/JonusNattapong/Reverse-Engineer#readme",
   "main": "index.js",
   "bin": {
-    "bluecode": "index.js"
+    "blueprompt": "index.js"
   },
   "scripts": {
     "start": "node index.js",
@@ -23,7 +23,7 @@
   },
   "keywords": [
     "github",
-    "bluecode",
+    "blueprompt",
     "reverse-engineering",
     "openai",
     "express"
