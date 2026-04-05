@@ -1,0 +1,29 @@
+{
+  "name": "reverse-engineer",
+  "version": "1.0.0",
+  "description": "GitHub path reverse engineering app with GitHub API and OpenAI integration",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "check": "node --check server.js && node --check script.js && node --check cli.js",
+    "tui": "node cli.js"
+  },
+  "keywords": [
+    "github",
+    "reverse-engineering",
+    "openai",
+    "express"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "boxen": "^5.1.2",
+    "chalk": "^4.1.2",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "figures": "^3.2.0",
+    "gradient-string": "^3.0.0",
+    "inquirer": "^8.2.7",
+    "ora": "^5.4.1"
+  }
+}
