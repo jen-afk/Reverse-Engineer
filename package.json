@@ -6,9 +6,6 @@
     "type": "git",
     "url": "git+https://github.com/JonusNattapong/Reverse-Engineer.git"
   },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
-  },
   "bugs": {
     "url": "https://github.com/JonusNattapong/Reverse-Engineer/issues"
   },
