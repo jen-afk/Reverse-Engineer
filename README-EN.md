@@ -38,9 +38,9 @@ REVERSE ENGINEER is a sophisticated engineering tool designed for analyzing and 
 
 ## Interface Showcase
 
-| Web Dashboard | TUI Operation |
-| :---: | :---: |
-| ![Web Interface](assets/start.png) | ![TUI Phase](assets/step.png) |
+| Web Dashboard | TUI Operation | Analysis Result |
+| :---: | :---: | :---: |
+| ![Web Interface](assets/start.png) | ![TUI Phase](assets/step.png) | ![Analysis Result](assets/result.png) |
 
 ---
 

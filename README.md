@@ -37,9 +37,9 @@
 
 ## หน้าตาของระบบ (Interface Showcase)
 
-| Web Dashboard | TUI Operation |
-| :---: | :---: |
-| ![REVERSE ENGINEER Web Interface](assets/start.png) | ![REVERSE ENGINEER TUI Phase](assets/step.png) |
+| Web Dashboard | TUI Operation | Analysis Result |
+| :---: | :---: | :---: |
+| ![REVERSE ENGINEER Web Interface](assets/start.png) | ![REVERSE ENGINEER TUI Phase](assets/step.png) | ![REVERSE ENGINEER Result](assets/result.png) |
 
 ---
 
