@@ -1,5 +1,7 @@
+#!/usr/bin/env node
 const inquirer = require("inquirer");
 const { spawn } = require("child_process");
+const path = require("path");
 const chalk = require("chalk");
 const figures = require("figures");
 
@@ -24,7 +26,8 @@ async function main() {
 
   if (mode === "web") {
     console.log(chalk.green(`\n${figures.tick} Launching API Gateway & Web Interface...\n`));
-    const server = spawn("node", ["server/index.js"], { stdio: "inherit" });
+    const serverPath = path.join(__dirname, "server", "index.js");
+    const server = spawn("node", [serverPath], { stdio: "inherit" });
     server.on("close", (code) => process.exit(code));
   } 
   
@@ -32,7 +35,8 @@ async function main() {
     console.log(chalk.yellow(`\n${figures.play} Initializing API Gateway in background...`));
     
     // Start server independently in background
-    const server = spawn("node", ["server/index.js"], {
+    const serverPath = path.join(__dirname, "server", "index.js");
+    const server = spawn("node", [serverPath], {
       stdio: ["ignore", "ignore", "inherit"], // Hide logs but show errors
       detached: false
     });
@@ -41,7 +45,8 @@ async function main() {
 
     // Wait a bit for server to bind port
     setTimeout(() => {
-      const cli = spawn("node", ["cli/index.js"], { stdio: "inherit" });
+      const cliPath = path.join(__dirname, "cli", "index.js");
+      const cli = spawn("node", [cliPath], { stdio: "inherit" });
       
       cli.on("close", (code) => {
         server.kill(); // Kill background server when CLI is done
