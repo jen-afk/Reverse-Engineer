@@ -14,9 +14,10 @@ const DEFAULT_BASE_URL =
 const DEFAULT_STYLE = "blueprint";
 const DEFAULT_LANGUAGE = "Thai";
 const DEFAULT_PROVIDER = process.env.DEFAULT_PROVIDER || "openai";
+const DEFAULT_STREAMING = process.env.STREAMING_ENABLED !== "false"; // Default to true unless explicitly disabled
 
 function updateEnv(key, value) {
-  const envPath = path.join(process.cwd(), ".env");
+  const envPath = path.join(__dirname, "..", ".env");
   let content = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
   const lines = content.split("\n");
   let found = false;
@@ -142,7 +143,7 @@ Options:
   --goal <text>        Target analysis goal
   --provider <name>    AI Provider (openai, anthropic, etc.)
   --model <id>         AI Model ID (optional)
-  --style <style>      summary, deep, step-by-step, refactor, blueprint
+  --style <style>      summary, deep, step-by-step, refactoring, security, perfection, blueprint
   --language <lang>    Thai, English, Bilingual
   --inspect-only       Skip AI analysis
   --json               Output raw JSON
@@ -260,39 +261,100 @@ function renderAnalysis(analysis) {
   return content;
 }
 
-async function handleOutputAction(content, metadata, health) {
+async function handleOutputAction(content, metadata, health, githubContext) {
+  const outputDir = path.join(__dirname, "..", "output");
+
   const { action } = await inquirer.prompt([
     {
       type: "list",
       name: "action",
       message: "What would you like to do with the result?",
       choices: [
-        { name: `${figures.pointer} Copy to Clipboard`, value: "copy" },
-        { name: `${figures.folder} Save as Markdown (.md)`, value: "save" },
+        { name: `${figures.pointer || ">>"} Copy to Clipboard`, value: "copy" },
+        { name: `${figures.folder || "[F]"} Export as Markdown (.md)`, value: "save-md" },
+        { name: `${figures.folder || "[F]"} Export as Plain Text (.txt)`, value: "save-txt" },
+        { name: `${figures.folder || "[F]"} Export as JSON (.json)`, value: "save-json" },
         {
-          name: `${figures.settings} Change Provider/Settings`,
+          name: `${figures.settings || "[S]"} Change Provider/Settings`,
           value: "config",
         },
-        { name: `${figures.tick} Done (Quit)`, value: "quit" },
+        { name: `${figures.tick || "[OK]"} Done (Quit)`, value: "quit" },
       ],
     },
   ]);
 
   if (action === "copy") {
-    const proc = exec("clip");
-    proc.stdin.write(content);
-    proc.stdin.end();
-    console.log(chalk.green(`\n${figures.tick} Content copied to clipboard!`));
-    return handleOutputAction(content, metadata, health);
+    try {
+      const platform = process.platform;
+      let clipCmd;
+      if (platform === "win32") clipCmd = "clip";
+      else if (platform === "darwin") clipCmd = "pbcopy";
+      else clipCmd = "xclip -selection clipboard";
+
+      const proc = exec(clipCmd);
+      proc.stdin.write(content);
+      proc.stdin.end();
+      console.log(chalk.green(`\n${figures.tick} Content copied to clipboard!`));
+    } catch {
+      console.log(chalk.red(`\n${figures.cross} Clipboard not available on this platform. Use export instead.`));
+    }
+    return handleOutputAction(content, metadata, health, githubContext);
   }
 
-  if (action === "save") {
-    const filename = `${metadata.owner}-${metadata.repo}-analysis.md`;
-    fs.writeFileSync(filename, content, "utf8");
+  if (action.startsWith("save-")) {
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const baseName = `${metadata.owner}-${metadata.repo}`;
+    const format = action.replace("save-", "");
+    let filename, fileContent;
+
+    switch (format) {
+      case "md": {
+        filename = `${baseName}-analysis.md`;
+        const header = [
+          "---",
+          `# Reverse Engineer — Analysis Export`,
+          `# Repo: ${metadata.owner}/${metadata.repo}`,
+          `# Branch: ${metadata.branch}`,
+          `# Type: ${metadata.type}`,
+          `# Path: ${metadata.path}`,
+          `# Date: ${new Date().toISOString()}`,
+          "---",
+          "",
+        ].join("\n");
+        fileContent = header + content;
+        break;
+      }
+      case "txt": {
+        filename = `${baseName}-analysis.txt`;
+        fileContent = content;
+        break;
+      }
+      case "json": {
+        filename = `${baseName}-analysis.json`;
+        fileContent = JSON.stringify({
+          meta: {
+            repo: `${metadata.owner}/${metadata.repo}`,
+            branch: metadata.branch,
+            type: metadata.type,
+            path: metadata.path,
+            url: metadata.url,
+            exportedAt: new Date().toISOString(),
+          },
+          analysis: content,
+        }, null, 2);
+        break;
+      }
+    }
+
+    const fullPath = path.join(outputDir, filename);
+    fs.writeFileSync(fullPath, fileContent, "utf8");
     console.log(
-      chalk.green(`\n${figures.tick} Saved to: ${chalk.bold(filename)}`),
+      chalk.green(`\n${figures.tick} Saved to: ${chalk.bold(`output/${filename}`)}`),
     );
-    return handleOutputAction(content, metadata, health);
+    return handleOutputAction(content, metadata, health, githubContext);
   }
 
   if (action === "config") {
@@ -436,7 +498,7 @@ async function promptForMissing(args, health = {}) {
       type: "list",
       name: "outputStyle",
       message: "Choose analysis style:",
-      choices: ["summary", "deep", "step-by-step", "refactor", "blueprint"],
+      choices: ["summary", "deep", "step-by-step", "refactoring", "security", "perfection", "blueprint"],
       default: DEFAULT_STYLE,
     });
   }
@@ -475,7 +537,9 @@ async function main() {
   let health = {};
   try {
     health = await fetchJson(`${args.baseUrl}/api/health`);
-  } catch (e) {}
+  } catch (e) {
+    console.log(chalk.yellow(`${figures.warning} Could not reach API server at ${args.baseUrl}. Some features may not work.`));
+  }
 
   const finalArgs = await promptForMissing(args, health);
 
@@ -486,12 +550,12 @@ async function main() {
 
   try {
     divider(1, "Handshake & Engine Check", "blue");
-    const health = await fetchJson(`${finalArgs.baseUrl}/api/health`);
+    const serverHealth = await fetchJson(`${finalArgs.baseUrl}/api/health`);
     
     const serverInfo = [
       `${chalk.cyan("API Gateway")}   : ${chalk.white(finalArgs.baseUrl)}`,
-      `${chalk.cyan("AI Gateway")}    : ${health.ok ? chalk.green("CONNECTED") : chalk.red("DISCONNECTED")}`,
-      `${chalk.cyan("Active Prov")}   : ${chalk.yellow(health.defaultProvider)}`,
+      `${chalk.cyan("AI Gateway")}    : ${serverHealth.ok ? chalk.green("CONNECTED") : chalk.red("DISCONNECTED")}`,
+      `${chalk.cyan("Active Prov")}   : ${chalk.yellow(serverHealth.defaultProvider)}`,
     ].join("\n");
 
     console.log(
@@ -532,17 +596,17 @@ async function main() {
 
     divider(3, "AI Synthesis & Pattern Analysis", "magenta");
     const analysisSpinner = ora({
-      text: `Syncing with code-neural networks via ${chalk.bold(health.defaultProvider)}...`,
+      text: `Syncing with code-neural networks via ${chalk.bold(serverHealth.defaultProvider)}...`,
       color: "magenta",
     }).start();
 
-    let selectedProvider = finalArgs.provider || health.defaultProvider;
+    let selectedProvider = finalArgs.provider || serverHealth.defaultProvider;
 
     if (
       (!selectedProvider || selectedProvider === "openai") &&
-      !health.hasOpenAIKey
+      !serverHealth.hasOpenAIKey
     ) {
-      const firstConfigured = Object.entries(health.providers || {}).find(
+      const firstConfigured = Object.entries(serverHealth.providers || {}).find(
         ([_, p]) => p.configured,
       );
       if (firstConfigured) {
@@ -550,7 +614,9 @@ async function main() {
       }
     }
 
-    const analysis = await fetchJson(`${finalArgs.baseUrl}/api/analyze`, {
+    const shouldStream = DEFAULT_STREAMING && !finalArgs.json;
+
+    const response = await fetch(`${finalArgs.baseUrl}/api/analyze/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -561,18 +627,63 @@ async function main() {
         provider: selectedProvider,
         model: finalArgs.model || "",
         extraContext: finalArgs.extraContext || "",
+        stream: shouldStream
       }),
     });
-    analysisSpinner.succeed(chalk.green("Intelligence synthesis complete."));
+
+    if (!response.ok) throw new Error(`Analysis connection failed: ${response.status}`);
+
+    let finalContent = "";
+
+    if (shouldStream) {
+      analysisSpinner.succeed(chalk.green("Intelligence synthesis handshake successful. Receiving stream..."));
+      process.stdout.write("\n"); 
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.trim().startsWith("data: ")) continue;
+          const dataStr = line.replace("data: ", "").trim();
+          if (dataStr === "[DONE]") continue;
+
+          try {
+            const data = JSON.parse(dataStr);
+            if (data.chunk) {
+              const part = data.chunk;
+              finalContent += part;
+              process.stdout.write(part);
+            }
+          } catch (e) {}
+        }
+      }
+    } else {
+      analysisSpinner.text = "Engaging long-form architectural synthesis... This may take up to 2 minutes.";
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
+      finalContent = data.text || "";
+      analysisSpinner.succeed(chalk.green("Deep synthesis complete."));
+      console.log(chalk.dim("\n --- ANALYSIS PREVIEW START --- \n"));
+      console.log(finalContent);
+      console.log(chalk.dim("\n --- ANALYSIS PREVIEW END --- \n"));
+    }
+    process.stdout.write("\n\n"); // End of stream spacing
 
     if (finalArgs.json) {
-      console.log(JSON.stringify({ githubContext, analysis }, null, 2));
+      console.log(JSON.stringify({ githubContext, analysis: { text: finalContent } }, null, 2));
       return;
     }
 
     divider(4, "Insight Delivery & Export", "green");
-    const finalContent = renderAnalysis(analysis);
-    await handleOutputAction(finalContent, githubContext.metadata, health);
+    await handleOutputAction(finalContent, githubContext.metadata, serverHealth, githubContext);
     
     summaryBox("MISSION STATUS", `${figures.tick} REVERSE ENGINEERING SUCCESSFUL\n${figures.star} Insights ready for engineering team.`, "green");
   } catch (error) {

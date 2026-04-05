@@ -16,24 +16,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Analysis results (Markdown outputs from CLI)
-*-analysis.md
-
-# OS metadata
-.DS_Store
-Thumbs.db
-
-# IDE settings
-.vscode/
-.idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Temporary files
-/tmp/
-*.tmp
-
+# Analysis results
 /output/
+*.log

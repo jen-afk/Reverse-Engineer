@@ -41,18 +41,43 @@ async function main() {
       detached: false
     });
 
-    console.log(chalk.cyan(`${figures.info} Cloud Engine is warming up. Jumping to TUI interface...\n`));
+    server.on("error", (err) => {
+      console.error(chalk.red(`${figures.cross} Server failed to start: ${err.message}`));
+      process.exit(1);
+    });
 
-    // Wait a bit for server to bind port
-    setTimeout(() => {
-      const cliPath = path.join(__dirname, "cli", "index.js");
-      const cli = spawn("node", [cliPath], { stdio: "inherit" });
-      
-      cli.on("close", (code) => {
-        server.kill(); // Kill background server when CLI is done
-        process.exit(code);
-      });
-    }, 1500);
+    console.log(chalk.cyan(`${figures.info} Waiting for API Gateway to become ready...`));
+
+    // Health check loop — wait up to 10 seconds
+    const maxWait = 10000;
+    const interval = 500;
+    let elapsed = 0;
+    let serverReady = false;
+
+    while (elapsed < maxWait) {
+      try {
+        const res = await fetch("http://localhost:3000/api/health");
+        if (res.ok) { serverReady = true; break; }
+      } catch {}
+      await new Promise(r => setTimeout(r, interval));
+      elapsed += interval;
+    }
+
+    if (!serverReady) {
+      console.error(chalk.red(`${figures.cross} API Gateway failed to start within ${maxWait / 1000}s. Port may be in use.`));
+      server.kill();
+      process.exit(1);
+    }
+
+    console.log(chalk.green(`${figures.tick} API Gateway ready. Launching TUI...\n`));
+
+    const cliPath = path.join(__dirname, "cli", "index.js");
+    const cli = spawn("node", [cliPath], { stdio: "inherit" });
+    
+    cli.on("close", (code) => {
+      server.kill(); // Kill background server when CLI is done
+      process.exit(code);
+    });
   }
 }
 

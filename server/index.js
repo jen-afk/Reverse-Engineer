@@ -111,7 +111,10 @@ function encodePathSegments(value) {
 }
 
 async function fetchJson(url, options = {}) {
-  const response = await fetch(url, options);
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(30000),
+    ...options,
+  });
 
   if (!response.ok) {
     const text = await response.text();
@@ -288,11 +291,55 @@ function buildAnalysisPrompt({
        7. ACTIONABLE IMPLEMENTATION PLAN: A prioritized, step-by-step guide for a Coder AI to build this system from scratch.
        
        START YOUR RESPONSE IMMEDIATELY WITH: 'Act as an expert developer. Based on the following system specification...'`
+    : outputStyle === "security"
+    ? `You are a world-class Cybersecurity Expert and Lead Penetration Tester. 
+       Your goal is to conduct a DEEP SECURITY AUDIT on the provided repository context.
+       Analyze for:
+       - Vulnerabilities (XSS, SQLi, CSRF, etc.)
+       - Logic flaws in authentication/authorization
+       - Sensitive data leaks (hardcoded keys, env exposure)
+       - Dependency risks
+       
+       FORMAT: Professional audit report with Severity levels (Low, Medium, High, Critical) and Remediation steps.`
+    : outputStyle === "refactoring"
+    ? `You are a Senior Staff Engineer focused on code quality, performance, and maintainability.
+       Your goal is to produce a REFACTORING & OPTIMIZATION GUIDE.
+       Focus on:
+       - Technical debt identification
+       - Design pattern improvements
+       - Performance bottlenecks
+       - Type safety and error handling
+       
+       FORMAT: Actionable refactoring plan with before/after logic descriptions.`
+    : outputStyle === "perfection"
+    ? `You are an Elite Software Architect and Reverse Engineering Specialist. 
+       Your task is to produce a HIGH-FIDELITY ARCHITECTURAL BLUEPRINT of the provided codebase.
+       
+       OPERATIONAL FRAMEWORK:
+       1. PERSONA: Think like a Senior Staff Engineer conducting a due-diligence audit.
+       2. EVIDENCE-BASED: Every claim must be backed by specific file paths or code snippets. 
+       3. NO HALLUCINATION: If a logic flow is not visible, state it as a "Hypothesis" or "Missing Context".
+       
+       COMPONENTS TO INCLUDE:
+       - EXECUTIVE SUMMARY: The business value and high-level tech stack.
+       - C4 CONTAINER DIAGRAM: Use Mermaid.js syntax to visualize the macro structure.
+       - DATA FLOW ANALYSIS: Trace the 'Life of a Request' from entry to persistence.
+       - BEHAVIORAL SEQUENCE: A Mermaid.js sequence diagram for the most critical logic flow.
+       - ARCHITECTURAL DECISION RECORDS (ADR): Identify the 'WHY' behind the patterns used (e.g., Why Express over Fastify?).
+       - ACTIONABLE RECREATION PLAN: A prioritized list of steps for another AI to rebuild this system from zero.
+       
+       DIAGRAM RULES:
+       - Use ONLY Mermaid.js code blocks (\`\`\`mermaid). 
+       - Avoid complex box-drawing characters that break TUIs.
+       
+       START YOUR RESPONSE IMMEDIATELY WITH: '### [ARCHITECTURAL BLUEPRINT: SYSTEM RECREATION SPECIFICATION]'`
     : `You are a senior software architect and reverse engineering assistant. Produce a: ${outputStyle || "summary"} in ${language || "Thai"}.`;
 
   return [
+    `# SYSTEM PROMPT: ${outputStyle.toUpperCase()} MODE`,
     baseInstruction,
-    `Analyze/Summarize the following GitHub target:`,
+    `---`,
+    `### CONTEXTUAL DATA:`,
     `Target metadata:
 -- URL: ${target.url}
 -- Repository: ${target.owner}/${target.repo}
@@ -311,13 +358,7 @@ function buildAnalysisPrompt({
     readmeText,
     outputStyle === "blueprint" 
       ? `FINAL OUTPUT FORMAT: A single, long, well-structured System Specification Prompt. Start immediately with 'Act as an expert developer...'`
-      : `Please produce:
-1. A concise overview of what this target does.
-2. Key modules, dependencies, or layers connected to it.
-3. Execution flow, inputs, outputs, and integration points.
-4. Risks, assumptions, hidden coupling, or code smells.
-5. What to inspect next for deeper reverse engineering.
-6. Actionable suggestions for documentation or refactoring if relevant.`
+      : `Please produce a professional, structured document following the guidelines provided in the instruction above.`
   ].join("\n\n");
 }
 
@@ -387,6 +428,7 @@ async function postJson(url, { headers, body }) {
     method: "POST",
     headers,
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(120000),
   });
 
   if (!response.ok) {
@@ -420,187 +462,189 @@ function extractChatCompletionText(data) {
     .trim();
 }
 
-async function analyzeWithProvider(payload) {
+async function analyzeWithProvider(payload, onChunk = null) {
   const prompt = buildAnalysisPrompt(payload);
   const selected = resolveProvider(payload.provider, payload.model);
-  let data;
   let outputText = "";
 
-  if (selected.provider === "openai") {
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error("ยังไม่ได้ตั้งค่า OPENAI_API_KEY");
-    }
+  const isStream = typeof onChunk === "function";
 
-    data = await postJson("https://api.openai.com/v1/chat/completions", {
+  if (selected.provider === "openai") {
+    if (!process.env.OPENAI_API_KEY) throw new Error("ยังไม่ได้ตั้งค่า OPENAI_API_KEY");
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
-      body: {
+      body: JSON.stringify({
         model: selected.model,
+        stream: isStream,
         messages: [
-          {
-            role: "system",
-            content:
-              "Answer clearly and practically. Be explicit about what is directly observed from the provided repository context versus what is inferred.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
+          { role: "system", content: "Answer clearly and practically. Be explicit about what is directly observed." },
+          { role: "user", content: prompt },
         ],
-      },
+      }),
+      signal: AbortSignal.timeout(120000),
     });
 
-    outputText = extractChatCompletionText(data);
-  } else if (selected.provider === "anthropic") {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      throw new Error("ยังไม่ได้ตั้งค่า ANTHROPIC_API_KEY");
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI Error (${response.status}): ${errorText}`);
     }
 
-    data = await postJson("https://api.anthropic.com/v1/messages", {
+    if (isStream) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n").filter(l => l.trim().startsWith("data: "));
+        for (const line of lines) {
+          const dataStr = line.replace("data: ", "").trim();
+          if (dataStr === "[DONE]") break;
+          try {
+            const json = JSON.parse(dataStr);
+            const content = json.choices[0]?.delta?.content || "";
+            if (content) {
+              outputText += content;
+              onChunk(content);
+            }
+          } catch {}
+        }
+      }
+    } else {
+      const data = await response.json();
+      outputText = extractChatCompletionText(data);
+    }
+  } else if (selected.provider === "anthropic") {
+    if (!process.env.ANTHROPIC_API_KEY) throw new Error("ยังไม่ได้ตั้งค่า ANTHROPIC_API_KEY");
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-api-key": process.env.ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
       },
-      body: {
+      body: JSON.stringify({
         model: selected.model,
-        max_tokens: 2000,
-        system:
-          "Answer clearly and practically. Be explicit about what is directly observed from the provided repository context versus what is inferred.",
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-      },
+        max_tokens: 8192,
+        stream: isStream,
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal: AbortSignal.timeout(120000),
     });
 
-    outputText = extractAnthropicText(data);
-  } else if (selected.provider === "gemini") {
-    if (!process.env.GEMINI_API_KEY) {
-      throw new Error("ยังไม่ได้ตั้งค่า GEMINI_API_KEY");
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Anthropic Error (${response.status}): ${errorText}`);
     }
 
-    data = await postJson(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(selected.model)}:generateContent`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": process.env.GEMINI_API_KEY,
-        },
-        body: {
-          systemInstruction: {
-            parts: [
-              {
-                text: "Answer clearly and practically. Be explicit about what is directly observed from the provided repository context versus what is inferred.",
-              },
-            ],
-          },
-          contents: [
-            {
-              parts: [
-                {
-                  text: prompt,
-                },
-              ],
-            },
-          ],
-        },
+    if (isStream) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const json = JSON.parse(line.replace("data: ", ""));
+              if (json.type === "content_block_delta") {
+                const content = json.delta?.text || "";
+                outputText += content;
+                onChunk(content);
+              }
+            } catch {}
+          }
+        }
       }
-    );
-
-    outputText = extractGeminiText(data);
-  } else if (selected.provider === "ollama") {
-    data = await postJson(`${selected.baseUrl}/api/chat`, {
+    } else {
+      const data = await response.json();
+      outputText = extractAnthropicText(data);
+    }
+  } else {
+    // KiloCode, Groq, xAI, etc. (OpenAI-Compatible)
+    const apiKey = process.env[`${selected.provider.toUpperCase()}_API_KEY`];
+    const url = selected.baseUrl ? `${selected.baseUrl}/chat/completions` : "https://api.openai.com/v1/chat/completions";
+    
+    const response = await fetch(url, {
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
       },
-      body: {
+      body: JSON.stringify({
         model: selected.model,
-        stream: false,
-        messages: [
-          {
-            role: "system",
-            content:
-              "Answer clearly and practically. Be explicit about what is directly observed from the provided repository context versus what is inferred.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-      },
+        stream: isStream,
+        max_tokens: 8192, // High-fidelity blueprints need more tokens
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal: AbortSignal.timeout(300000), // Extend to 5 minutes for complex analysis
     });
 
-    outputText = data.message?.content || "";
-  } else {
-    const providerSettings = {
-      openrouter: {
-        key: process.env.OPENROUTER_API_KEY,
-        url: "https://openrouter.ai/api/v1/chat/completions",
-        extraHeaders: {
-          "HTTP-Referer": process.env.OPENROUTER_SITE_URL || "http://localhost:3000",
-          "X-Title": process.env.OPENROUTER_APP_NAME || "Reverse Engineer",
-        },
-      },
-      groq: {
-        key: process.env.GROQ_API_KEY,
-        url: "https://api.groq.com/openai/v1/chat/completions",
-      },
-      xai: {
-        key: process.env.XAI_API_KEY,
-        url: "https://api.x.ai/v1/chat/completions",
-      },
-      mistral: {
-        key: process.env.MISTRAL_API_KEY,
-        url: "https://api.mistral.ai/v1/chat/completions",
-      },
-      kilocode: {
-        key: process.env.KILOCODE_API_KEY,
-        url: `${selected.baseUrl}/chat/completions`,
-      },
-    }[selected.provider];
-
-    const envVarName = `${selected.provider.toUpperCase()}_API_KEY`;
-    if (!providerSettings?.key) {
-      throw new Error(`ยังไม่ได้ตั้งค่า ${envVarName}`);
+    if (!response.ok) {
+      const errorText = await response.ok ? "" : await response.text();
+      throw new Error(`${selected.label} Error (${response.status}): ${errorText}`);
     }
 
-    data = await postJson(providerSettings.url, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${providerSettings.key}`,
-        ...(providerSettings.extraHeaders || {}),
-      },
-      body: {
-        model: selected.model,
-        messages: [
-          {
-            role: "system",
-            content:
-              "Answer clearly and practically. Be explicit about what is directly observed from the provided repository context versus what is inferred.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-      },
-    });
+    const contentType = response.headers.get("content-type") || "";
+    const isResponseStreaming = contentType.includes("text/event-stream") || isStream;
 
-    outputText = extractChatCompletionText(data);
+    if (isResponseStreaming && response.body) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let streamFailed = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        
+        // Check if this is actually a JSON error response instead of a stream
+        if (!done && chunk.trim().startsWith("{") && !chunk.includes("data: ")) {
+          try {
+            const json = JSON.parse(chunk);
+            outputText = extractChatCompletionText(json);
+            if (onChunk) onChunk(outputText);
+            streamFailed = true;
+            break;
+          } catch {
+            // Not JSON, continue streaming
+          }
+        }
+
+        const lines = chunk.split("\n").filter(l => l.trim().startsWith("data: "));
+        for (const line of lines) {
+          const dataStr = line.replace("data: ", "").trim();
+          if (dataStr === "[DONE]") break;
+          try {
+            const json = JSON.parse(dataStr);
+            const content = json.choices[0]?.delta?.content || "";
+            if (content) {
+              outputText += content;
+              onChunk(content);
+            }
+          } catch {}
+        }
+      }
+    } else {
+      // Fallback to regular JSON handling
+      const data = await response.json();
+      outputText = extractChatCompletionText(data);
+      if (onChunk) onChunk(outputText);
+    }
   }
-
-  outputText = outputText || "The model returned no text output for this request.";
 
   return {
     provider: selected.provider,
-    model: data.model || selected.model,
+    model: selected.model,
     text: outputText,
-    responseId: data.id || null,
   };
 }
 
@@ -628,32 +672,44 @@ app.get("/api/github/inspect", async (req, res) => {
   }
 });
 
-app.post("/api/analyze", async (req, res) => {
-  try {
-    dotenv.config({ override: true }); // Force reload env changes
-    const { githubContext, goal, outputStyle, language, extraContext, provider, model } =
-      req.body || {};
+app.post("/api/analyze/stream", async (req, res) => {
+    const payload = req.body || {};
+    const shouldStream = payload.stream !== false;
 
-    if (!githubContext || !githubContext.metadata) {
-      return res.status(400).json({ error: "ต้องส่ง githubContext มาด้วย" });
+    if (shouldStream) {
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+
+        try {
+            if (!payload.githubContext) {
+                res.write(`data: ${JSON.stringify({ error: "ต้องส่ง githubContext มาด้วย" })}\n\n`);
+                return res.end();
+            }
+
+            await analyzeWithProvider(payload, (chunk) => {
+                res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+            });
+
+            res.write(`data: [DONE]\n\n`);
+            res.end();
+        } catch (error) {
+            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+            res.end();
+        }
+    } else {
+        // Non-streaming mode
+        try {
+            if (!payload.githubContext) {
+                return res.status(400).json({ error: "ต้องส่ง githubContext มาด้วย" });
+            }
+
+            const result = await analyzeWithProvider({ ...payload, stream: false });
+            res.json(result);
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
     }
-
-    const analysis = await analyzeWithProvider({
-      githubContext,
-      goal,
-      outputStyle,
-      language,
-      extraContext,
-      provider,
-      model,
-    });
-
-    return res.json(analysis);
-  } catch (error) {
-    return res.status(400).json({
-      error: error.message,
-    });
-  }
 });
 
 app.listen(PORT, () => {
