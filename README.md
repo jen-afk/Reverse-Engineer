@@ -1,6 +1,6 @@
 # REVERSE ENGINEER
 
-![REVERSE ENGINEER - AI Repository Analysis](assets/title.png)
+![REVERSE ENGINEER - AI Repository Analysis](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/title.png)
 
 > [!TIP]
 > [English Version here](README-EN.md)
@@ -39,7 +39,7 @@
 
 | Web Dashboard | TUI Operation | Analysis Result |
 | :---: | :---: | :---: |
-| ![REVERSE ENGINEER Web Interface](assets/start.png) | ![REVERSE ENGINEER TUI Phase](assets/step.png) | ![REVERSE ENGINEER Result](assets/result.png) |
+| ![REVERSE ENGINEER Web Interface](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/start.png) | ![REVERSE ENGINEER TUI Phase](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/step.png) | ![REVERSE ENGINEER Result](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/result.png) |
 
 ---
 

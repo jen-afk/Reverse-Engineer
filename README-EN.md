@@ -1,6 +1,6 @@
 # REVERSE ENGINEER
 
-![REVERSE ENGINEER - AI Repository Analysis](assets/title.png)
+![REVERSE ENGINEER - AI Repository Analysis](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/title.png)
 
 > [!NOTE]
 > [Thai Version here / ดูฉบับภาษาไทยที่นี่](README.md)
@@ -40,7 +40,7 @@ REVERSE ENGINEER is a sophisticated engineering tool designed for analyzing and 
 
 | Web Dashboard | TUI Operation | Analysis Result |
 | :---: | :---: | :---: |
-| ![Web Interface](assets/start.png) | ![TUI Phase](assets/step.png) | ![Analysis Result](assets/result.png) |
+| ![Web Interface](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/start.png) | ![TUI Phase](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/step.png) | ![Analysis Result](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/result.png) |
 
 ---
 

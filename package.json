@@ -1,7 +1,15 @@
 {
   "name": "reverse-engineer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "GitHub path reverse engineering app with GitHub API and OpenAI integration",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JonusNattapong/Reverse-Engineer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/JonusNattapong/Reverse-Engineer/issues"
+  },
+  "homepage": "https://github.com/JonusNattapong/Reverse-Engineer#readme",
   "main": "index.js",
   "bin": {
     "reverse-engineer": "./index.js",
