@@ -39,10 +39,7 @@
 
 ### Agent Sandbox Mode
 
-<video width="100%" controls autoplay loop muted playsinline>
-  <source src="https://github.com/user-attachments/assets/31d25731-43c8-4251-837f-fa351d8e0a26" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+[![Agent Sandbox Mode](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/start.png)](https://github.com/user-attachments/assets/31d25731-43c8-4251-837f-fa351d8e0a26)
 
 ### Web Dashboard
 
