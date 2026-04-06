@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
+const promptManager = require("../lib/promptManager");
 
 const TOOLS = [
   {
@@ -81,15 +82,7 @@ class SandboxAgent {
     // 2. Initialize Agent Memory
     this.messages.push({
       role: "system",
-      content: `You are an autonomous AI Architecture Sandbox.
-Your objective: Deeply analyze the local repository and generate the ULTIMATE Blueprint System Prompt.
-The codebase is currently in your working directory. You have full freedom.
-RULES:
-1. Start by listing the root directory using 'list_dir'.
-2. Identify core configuration files (e.g., package.json, docker-compose, tsconfig, main.js) and read them.
-3. Don't blindly read everything, use 'grep_search' if you want to trace where a variable or component is used.
-4. Stop using tools once you grasp the full architectural flow.
-5. When done, reply back with the ultimate System Prompt / Documentation. DO NOT call anymore tools. Just output the final mega-prompt. Focus purely on generating the prompt.`
+      content: promptManager.getPrompt("agent")
     });
     
     this.messages.push({ 

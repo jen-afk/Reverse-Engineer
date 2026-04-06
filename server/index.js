@@ -3,6 +3,7 @@ const express = require("express");
 const dotenv = require("dotenv");
 const { SandboxAgent } = require("./agent");
 const configManager = require("../lib/configManager");
+const promptManager = require("../lib/promptManager");
 
 // Load persistent config first, then let .env override
 configManager.migrateFromDotEnv(path.join(__dirname, "..", ".env"));
@@ -277,68 +278,14 @@ function buildAnalysisPrompt({
     : "No README preview attached.";
 
   const baseInstruction = outputStyle === "blueprint" 
-    ? `You are a Senior Software Architect and Technical Documentation Expert specializing in high-fidelity system recreation. 
-       Your goal is to generate a COMPREHENSIVE IMPLEMENTATION BLUEPRINT based on the provided repository context.
-       
-       This blueprint must be structured so that a junior-to-mid-level developer AI can RECREATE the system with 95% accuracy.
-       
-       CRITICAL RULES:
-       - DO NOT use ASCII box-drawing characters (┌, ─, │, ╔, ║) for flowcharts or architectures. They break terminal UI rendering.
-       - Use ONLY plain text, markdown bullet points, or standard code blocks (like \`\`\`mermaid) for diagrams.
-       
-       FOLLOW THESE STEPS IN YOUR OUTPUT:
-       1. EXECUTIVE SUMMARY: High-level purpose and business/technical goals.
-       2. ARCHITECTURAL OVERVIEW: Text-based description or Mermaid-style diagram of component interactions.
-       3. CORE ENTITIES & DATA MODELS: Key data structures, state shapes, and API schemas.
-       4. KEY FUNCTIONALITY & LOGIC FLOW: Step-by-step processing pipelines for critical features.
-       5. TECHNICAL DECISIONS & PATTERNS: Observed design patterns (e.g., Singleton, Factory, MVC) and framework constraints.
-       6. INTEGRATION & DEPENDENCIES: Critical external libraries, third-party APIs, and infrastructure needs.
-       7. ACTIONABLE IMPLEMENTATION PLAN: A prioritized, step-by-step guide for a Coder AI to build this system from scratch.
-       
-       START YOUR RESPONSE IMMEDIATELY WITH: 'Act as an expert developer. Based on the following system specification...'`
+    ? promptManager.getPrompt("blueprint")
     : outputStyle === "security"
-    ? `You are a world-class Cybersecurity Expert and Lead Penetration Tester. 
-       Your goal is to conduct a DEEP SECURITY AUDIT on the provided repository context.
-       Analyze for:
-       - Vulnerabilities (XSS, SQLi, CSRF, etc.)
-       - Logic flaws in authentication/authorization
-       - Sensitive data leaks (hardcoded keys, env exposure)
-       - Dependency risks
-       
-       FORMAT: Professional audit report with Severity levels (Low, Medium, High, Critical) and Remediation steps.`
+    ? promptManager.getPrompt("security")
     : outputStyle === "refactoring"
-    ? `You are a Senior Staff Engineer focused on code quality, performance, and maintainability.
-       Your goal is to produce a REFACTORING & OPTIMIZATION GUIDE.
-       Focus on:
-       - Technical debt identification
-       - Design pattern improvements
-       - Performance bottlenecks
-       - Type safety and error handling
-       
-       FORMAT: Actionable refactoring plan with before/after logic descriptions.`
+    ? promptManager.getPrompt("refactoring")
     : outputStyle === "perfection"
-    ? `You are an Elite Software Architect and Reverse Engineering Specialist. 
-       Your task is to produce a HIGH-FIDELITY ARCHITECTURAL BLUEPRINT of the provided codebase.
-       
-       OPERATIONAL FRAMEWORK:
-       1. PERSONA: Think like a Senior Staff Engineer conducting a due-diligence audit.
-       2. EVIDENCE-BASED: Every claim must be backed by specific file paths or code snippets. 
-       3. NO HALLUCINATION: If a logic flow is not visible, state it as a "Hypothesis" or "Missing Context".
-       
-       COMPONENTS TO INCLUDE:
-       - EXECUTIVE SUMMARY: The business value and high-level tech stack.
-       - C4 CONTAINER DIAGRAM: Use Mermaid.js syntax to visualize the macro structure.
-       - DATA FLOW ANALYSIS: Trace the 'Life of a Request' from entry to persistence.
-       - BEHAVIORAL SEQUENCE: A Mermaid.js sequence diagram for the most critical logic flow.
-       - ARCHITECTURAL DECISION RECORDS (ADR): Identify the 'WHY' behind the patterns used (e.g., Why Express over Fastify?).
-       - ACTIONABLE RECREATION PLAN: A prioritized list of steps for another AI to rebuild this system from zero.
-       
-       DIAGRAM RULES:
-       - Use ONLY Mermaid.js code blocks (\`\`\`mermaid). 
-       - Avoid complex box-drawing characters that break TUIs.
-       
-       START YOUR RESPONSE IMMEDIATELY WITH: '### [ARCHITECTURAL BLUEPRINT: SYSTEM RECREATION SPECIFICATION]'`
-    : `You are a senior software architect and reverse engineering assistant. Produce a: ${outputStyle || "summary"} in ${language || "Thai"}.`;
+    ? promptManager.getPrompt("perfection")
+    : `${promptManager.getPrompt("default")} Produce a: ${outputStyle || "summary"} in ${language || "Thai"}.`;
 
   return [
     `# SYSTEM PROMPT: ${outputStyle.toUpperCase()} MODE`,

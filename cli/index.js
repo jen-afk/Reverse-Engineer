@@ -9,6 +9,7 @@ const path = require("path");
 const { exec } = require("child_process");
 const { stdin: input, stdout: output } = require("process");
 const configManager = require("../lib/configManager");
+const promptManager = require("../lib/promptManager");
 
 // Load persistent config into process.env on startup
 configManager.migrateFromDotEnv(path.join(__dirname, "..", ".env"));
@@ -462,6 +463,97 @@ async function configureProvider(health) {
   return { provider: providerId, model };
 }
 
+async function editPromptTemplates() {
+  const prompts = promptManager.listPrompts();
+
+  const { selected } = await inquirer.prompt([
+    {
+      type: "list",
+      name: "selected",
+      message: "Select a prompt template to edit:",
+      choices: [
+        ...prompts.map(p => ({
+          name: `${p.customized ? chalk.yellow("[Custom]") : chalk.dim("[Default]")} ${p.name}`,
+          value: p.name,
+        })),
+        { name: chalk.dim("-- Back to Main Menu --"), value: "__back__" },
+      ],
+    },
+  ]);
+
+  if (selected === "__back__") return;
+
+  const current = promptManager.getPrompt(selected);
+  const isCustom = promptManager.isCustomized(selected);
+
+  console.log(chalk.cyan(`\n--- Current "${selected}" Prompt ---`));
+  console.log(chalk.dim(current.length > 500 ? current.slice(0, 500) + "\n..." : current));
+  console.log(chalk.cyan("--- End of Preview ---\n"));
+
+  const { action } = await inquirer.prompt([
+    {
+      type: "list",
+      name: "action",
+      message: "What would you like to do?",
+      choices: [
+        { name: "[E] Edit in text editor", value: "edit" },
+        { name: "[O] Open prompt file location", value: "open" },
+        ...(isCustom ? [{ name: "[R] Reset to default", value: "reset" }] : []),
+        { name: "[<] Back", value: "back" },
+      ],
+    },
+  ]);
+
+  if (action === "edit") {
+    // Save current to file so user can edit
+    const promptPath = path.join(promptManager.getPromptsDir(), `${selected}.md`);
+    if (!fs.existsSync(promptManager.getPromptsDir())) {
+      fs.mkdirSync(promptManager.getPromptsDir(), { recursive: true });
+    }
+    if (!fs.existsSync(promptPath)) {
+      fs.writeFileSync(promptPath, promptManager.getDefault(selected), "utf8");
+    }
+
+    // Try to open in default editor
+    const editor = process.env.EDITOR || (process.platform === "win32" ? "notepad" : "nano");
+    console.log(chalk.yellow(`\nOpening ${chalk.bold(promptPath)} in ${editor}...`));
+    console.log(chalk.dim("Edit the file, save it, then close the editor to continue.\n"));
+
+    try {
+      const { execSync } = require("child_process");
+      execSync(`${editor} "${promptPath}"`, { stdio: "inherit" });
+      console.log(chalk.green(`${figures.tick} Prompt "${selected}" updated successfully!`));
+      console.log(chalk.dim(`Saved at: ${promptPath}`));
+    } catch (e) {
+      console.log(chalk.yellow(`Could not open editor. You can manually edit the file at:`));
+      console.log(chalk.bold(promptPath));
+    }
+  } else if (action === "open") {
+    const dir = promptManager.getPromptsDir();
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+    // Save default to file if not exists
+    const promptPath = path.join(dir, `${selected}.md`);
+    if (!fs.existsSync(promptPath)) {
+      fs.writeFileSync(promptPath, promptManager.getDefault(selected), "utf8");
+    }
+
+    const openCmd = process.platform === "win32" ? "explorer" : process.platform === "darwin" ? "open" : "xdg-open";
+    try {
+      require("child_process").execSync(`${openCmd} "${dir}"`);
+      console.log(chalk.green(`\n${figures.tick} Opened prompt folder: ${dir}`));
+    } catch(e) {
+      console.log(chalk.yellow(`\nPrompt folder location: ${chalk.bold(dir)}`));
+    }
+  } else if (action === "reset") {
+    promptManager.resetPrompt(selected);
+    console.log(chalk.green(`\n${figures.tick} Prompt "${selected}" reset to default!`));
+  }
+
+  // Loop back to prompt editor
+  return editPromptTemplates();
+}
+
 async function promptForMissing(args, health = {}) {
   if (args.url) return args;
 
@@ -485,6 +577,10 @@ async function promptForMissing(args, health = {}) {
           name: `[*] Configure API Keys / Models`,
           value: "config",
         },
+        {
+          name: `[P] Edit Prompt Templates`,
+          value: "prompts",
+        },
         { name: `[x] Exit`, value: "exit" },
       ],
     },
@@ -494,6 +590,11 @@ async function promptForMissing(args, health = {}) {
 
   if (choice === "config") {
     await configureProvider(health);
+    return promptForMissing(args, health);
+  }
+
+  if (choice === "prompts") {
+    await editPromptTemplates();
     return promptForMissing(args, health);
   }
 
