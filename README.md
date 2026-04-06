@@ -57,15 +57,26 @@
 
 ## การเริ่มต้นใช้งาน
 
-### 1. การติดตั้ง (Installation)
+### 1. วิธีที่เร็วที่สุด (Quick Start)
+
+สามารถรันผ่าน npx ได้ทันทีโดยไม่ต้องติดตั้ง:
+
+```bash
+npx blueprompt
+```
+
+### 2. การติดตั้งแบบถาวร (Installation)
 
 ```bash
 npm install
 ```
 
-### 2. การตั้งค่า Environment
+### 3. การตั้งค่าระบบ (Configuration)
 
-สร้างไฟล์ `.env` ที่ Root ของโครงการและระบุ API Keys:
+**REVERSE ENGINEER (blueprompt)** รองรับการตั้งค่าผ่าน 2 ช่องทาง:
+
+1.  **Persistent Config (แนะนำ)**: เมื่อรันโปรแกรมครั้งแรก ท่านสามารถเลือกเมนู `[*] Configure API Keys / Models` เพื่อบันทึก Key ลงในเครื่องอย่างถาวร (AppData) ทำให้ไม่ต้องกรอกใหม่ทุกครั้งที่เปลี่ยนโฟลเดอร์ทำงาน
+2.  **ไฟล์ .env**: หรือสร้างไฟล์ `.env` ที่ Root เพื่อระบุ API Keys:
 
 ```env
 OPENAI_API_KEY=your_key_here
@@ -74,7 +85,11 @@ KILOCODE_API_KEY=your_key_here
 GITHUB_TOKEN=recommended_for_higher_limits
 ```
 
-### 3. การรันระบบ
+### 4. การปรับแต่ง Prompt (Prompt Customization)
+
+ท่านสามารถแก้ไข **System Prompt** ที่ AI ใช้ในการวิเคราะห์โค้ดได้เองผ่านเมนู `[P] Edit Prompt Templates` ซึ่งจะช่วยให้ท่านควมคุมพฤติกรรมของ AI Agent ได้ตามต้องการ (เช่น สั่งให้เน้นหาบั๊ก, สั่งให้สรุปแบบสั้นๆ หรือเปลี่ยนบุคลิก AI)
+
+### 5. การรันระบบ
 
 ```bash
 npm start

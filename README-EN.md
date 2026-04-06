@@ -58,15 +58,26 @@ REVERSE ENGINEER is a sophisticated engineering tool designed for analyzing and 
 
 ## Technical Setup
 
-### 1. Installation
+### 1. Quick Start
+
+Run instantly without installation:
+
+```bash
+npx blueprompt
+```
+
+### 2. Manual Installation
 
 ```bash
 npm install
 ```
 
-### 2. Environment Configuration
+### 3. User Configuration
 
-Create a `.env` file and populate the necessary authentication keys:
+**REVERSE ENGINEER (blueprompt)** offers flexible configuration:
+
+1.  **Persistent Configuration (Recommended)**: Use the `[*] Configure API Keys / Models` menu during your first run to save credentials securely in your machine's AppData. This persists across different project directories and `npx` sessions.
+2.  **Local .env file**: Alternatively, create a `.env` file in the project root:
 
 ```env
 OPENAI_API_KEY=your_key_here
@@ -75,7 +86,11 @@ KILOCODE_API_KEY=your_key_here
 GITHUB_TOKEN=recommended_for_higher_limits
 ```
 
-### 3. Execution
+### 4. Custom AI Prompts (Prompt Engineering)
+
+Unique to this tool is the ability to edit the **System Prompts** used by the AI. Via the `[P] Edit Prompt Templates` menu, you can tailor how the AI explores codebases (e.g., focus on security, summarize briefly, or change its technical persona). Custom prompts are stored in your home directory or AppData.
+
+### 5. Standard Execution
 
 ```bash
 npm start
