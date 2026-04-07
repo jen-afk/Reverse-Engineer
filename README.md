@@ -7,7 +7,7 @@
 
 ## ระบบวิเคราะห์และถอดรหัสโครงสร้าง GitHub Repository ด้วย AI
 
-**REVERSE ENGINEER** เป็นเครื่องมือระดับวิศวกรรมสำหรับวิเคราะห์และทำความเข้าใจโครงสร้างซอฟต์แวร์ที่ซับซ้อน โดยการดึงบริบทจริงจาก GitHub และใช้โมเดล AI ขั้นสูงในการประมวลผลตรรกะ ระบุรูปแบบ (Patterns) และสร้างพิมพ์เขียวทางเทคนิค (Technical Blueprints) เพื่อเป็นรากฐานในการพัฒนาหรือติดตั้งระบบใหม่
+**REVERSE ENGINEER (v1.1.0)** เป็นเครื่องมือระดับวิศวกรรมสำหรับวิเคราะห์และทำความเข้าใจโครงสร้างซอฟต์แวร์ที่ซับซ้อน โดยการดึงบริบทจริงจาก GitHub, Local Path และ **Live Websites** โดยมีระบบ AI Agent ที่สามารถรัน Browser จริงเพื่อสกัดข้อมูลสถาปัตยกรรม (Architecture), ตรวจสอบ API Endpoints ลับ และสร้างพิมพ์เขียวทางเทคนิค (Technical Blueprints) ได้อย่างแม่นยำ
 
 ---
 
@@ -29,9 +29,15 @@
 - แตกต่างจากการสรุปโค้ดทั่วไป โหมดนี้ออกแบบมาเพื่อสร้าง "ข้อกำหนดทางเทคนิค (Technical Specification)" ที่ครอบคลุมทั้งโครงสร้างข้อมูล, ตรรกะสำคัญ และความสัมพันธ์ระหว่างโมดูล
 - เหมาะสำหรับการนำพิมพ์เขียวไปใช้ใน AI Coding Assistants เพื่อจำลองระบบหรือพัฒนาต่อยอด (Re-implementation)
 
-### 4. Unified Launcher
+### 4. Hybrid Analysis Engine (New in v1.1.0!)
 
-- ระบบ Launcher ที่ช่วยใหเข้าถึงทั้ง Web Interface และ TUI Mode ได้ผ่านการควบคุมเดียว โดยระบบจะจัดการการทำงานของ Server ในพื้นหลังให้อัตโนมัติ
+- **Web Detective Mode**: รองรับการวิเคราะห์เว็บไซต์จริง (Live URLs) ไม่ใช่แค่ GitHub Repository อีกต่อไป
+- **Browser Simulation (Playwright)**: AI สามารถสั่งเปิด Browser จริงเพื่อเรนเดอร์ JavaScript (SPA) และสแกนหา API ที่แอปเรียกใช้งานเบื้องหลัง (XHR/Fetch Sniffing)
+- **Automatic De-obfuscation**: ระบบจัดรูปเล่มไฟล์ JavaScript ที่ถูกบีบอัด (Minified) ให้กลับมาอ่านง่ายโดยอัตโนมัติเพื่อให้ AI วิเคราะห์ตรรกะได้ลึกซึ้งที่สุด
+
+### 5. Unified Launcher
+
+- ระบบ Launcher ที่ช่วยให้เข้าถึงทั้ง Web Interface และ TUI Mode ได้ผ่านการควบคุมเดียว โดยระบบจะจัดการการทำงานของ Server ในพื้นหลังให้อัตโนมัติ
 
 ---
 
@@ -75,8 +81,8 @@ npm install
 
 **REVERSE ENGINEER (blueprompt)** รองรับการตั้งค่าผ่าน 2 ช่องทาง:
 
-1.  **Persistent Config (แนะนำ)**: เมื่อรันโปรแกรมครั้งแรก ท่านสามารถเลือกเมนู `[*] Configure API Keys / Models` เพื่อบันทึก Key ลงในเครื่องอย่างถาวร (AppData) ทำให้ไม่ต้องกรอกใหม่ทุกครั้งที่เปลี่ยนโฟลเดอร์ทำงาน
-2.  **ไฟล์ .env**: หรือสร้างไฟล์ `.env` ที่ Root เพื่อระบุ API Keys:
+1. **Persistent Config (แนะนำ)**: เมื่อรันโปรแกรมครั้งแรก ท่านสามารถเลือกเมนู `[*] Configure API Keys / Models` เพื่อบันทึก Key ลงในเครื่องอย่างถาวร (AppData) ทำให้ไม่ต้องกรอกใหม่ทุกครั้งที่เปลี่ยนโฟลเดอร์ทำงาน
+2. **ไฟล์ .env**: หรือสร้างไฟล์ `.env` ที่ Root เพื่อระบุ API Keys:
 
 ```env
 OPENAI_API_KEY=your_key_here
@@ -95,9 +101,16 @@ GITHUB_TOKEN=recommended_for_higher_limits
 npm start
 ```
 
+*ระบบจะเริ่มทำงานที่ `http://localhost:4040`*
+
 ---
 
-## การใช้งานขั้นสูงผ่าน CLI
+## ฟีเจอร์ระดับ Pro (New!)
+
+1. **Persistent Workspace**: ระบบจัดเก็บโปรเจกต์ถาวร สามารถกำหนด Path ได้เองผ่านเมนู [W]
+2. **AI Memory**: ระบบจำสถาปัตยกรรมผ่านไฟล์ `SYSTEM_BLUEPRINT.md` ทำให้ AI ฉลาดขึ้นทุกครั้งที่วิเคราะห์
+3. **Hybrid Web Agent**: AI Agent มี "ดวงตา" (Browser) สำหรับการท่องเว็บจริงเพื่อค้นหา API และ Logic ลับหลังบ้าน
+4. **Full Terminal Access**: AI Agent สามารถสั่งรันคำสั่ง CMD ใน Workspace เพื่อการวิเคราะห์ที่ล้ำลึกที่สุด
 
 สำหรับการรันคำสั่งโดยตรงผ่าน Terminal พร้อมพารามิเตอร์:
 

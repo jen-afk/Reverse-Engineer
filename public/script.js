@@ -104,12 +104,14 @@ async function analyzeGitHubContext(githubContext) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split("\n");
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop(); // Keep partial line
 
       for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          const dataStr = line.replace("data: ", "").trim();
+        const trimmed = line.trim();
+        if (trimmed.startsWith("data: ")) {
+          const dataStr = trimmed.replace("data: ", "").trim();
           if (dataStr === "[DONE]") {
             addLog(`Synthesis finalized`, "success");
             if (exportDropdown) exportDropdown.classList.add("visible");
