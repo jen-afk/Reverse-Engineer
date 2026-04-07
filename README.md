@@ -43,21 +43,24 @@
 
 ## หน้าตาของระบบ (Interface Showcase)
 
-### Agent Sandbox Mode
+### 🕵️‍♂️ The Complete Engineering Journey (12-Step Walkthrough)
 
-[![Agent Sandbox Mode](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/09_agent_sandbox.png)](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/09_agent_sandbox.png)
+สัมผัสประสบการณ์การถอดรหัสซอฟต์แวร์เต็มรูปแบบ ตั้งแต่การเปิดเครื่องไปจนถึงการสกัดเอาพิมพ์เขียวออกมาครับ:
 
-### Web Dashboard
-
-![Launcher Menu](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/01_launcher_menu.png)
-
-### TUI Operation
-
-![TUI Operation](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/08_extraction_phase.png)
-
-### Analysis Result
-
-![Analysis Result](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/12_blueprint_showcase.png)
+| Phase | Description | Interface Preview |
+|-------|-------------|-------------------|
+| **01** | **Launcher & Operation Select**: จุดเริ่มต้นภารกิจ เลือกโหมดการทำงาน | ![Step 01](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/01_launcher_menu.png) |
+| **02** | **TUI Command Center**: ยินดีต้อนรับสู่ศูนย์บัญชาการ Terminal | ![Step 02](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/02_tui_main_menu.png) |
+| **03** | **AI Provider Intelligence**: เลือกสมอง AI ที่คุณต้องการใช้งาน | ![Step 03](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/03_provider_config.png) |
+| **04** | **Strategy Choice**: เลือกรูปแบบการวิเคราะห์ (Blueprint/Security/etc) | ![Step 04](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/04_prompt_selection.png) |
+| **05** | **Deep Customization**: ปรับแต่ง Prompt ให้เข้ากับหน้างานจริง | ![Step 05](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/05_prompt_editor.png) |
+| **06** | **Target Lockdown**: กำหนด Workspace และเป้าหมายการแง่ะ | ![Step 06](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/06_workspace_setup.png) |
+| **07** | **Engine Handshake**: ตรวจสอบความพร้อมของระบบและเครือข่าย AI | ![Step 07](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/07_handshake_status.png) |
+| **08** | **Deep Extraction**: สกัด Metadata และโครงสร้างไฟล์แบบละเอียด | ![Step 08](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/08_extraction_phase.png) |
+| **09** | **Agent Sandbox Active**: AI เริ่มรัน Browser จริงเพื่อแง่ะ Logic ลึกซึ้ง | ![Step 09](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/09_agent_sandbox.png) |
+| **10** | **Synthesis Complete**: AI ประมวลผลและสร้าง Technical Specification | ![Step 10](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/10_synthesis_complete.png) |
+| **11** | **Multi-Format Export**: บันทึกผลลัพธ์ลงเครื่องในรูปแบบต่างๆ | ![Step 11](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/11_delivery_export.png) |
+| **12** | **Engineering Insights**: พิมพ์เขียวสถาปัตยกรรมฉบับสมบูรณ์ | ![Step 12](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/12_blueprint_showcase.png) |
 
 ---
 
