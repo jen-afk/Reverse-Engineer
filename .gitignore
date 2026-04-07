@@ -16,6 +16,16 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Analysis results
+# Analysis results & Workspaces
 /output/
+/workspaces/
+/temp/
+/tmp/
 *.log
+
+# AI Agent Specifics
+.gemini/
+agent_debug.log
+
+# VSCode settings
+.vscode/
