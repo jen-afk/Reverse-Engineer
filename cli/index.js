@@ -8,6 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const { exec } = require("child_process");
 const { stdin: input, stdout: output } = require("process");
+const { createParser } = require("eventsource-parser");
 const configManager = require("../lib/configManager");
 const promptManager = require("../lib/promptManager");
 
@@ -16,7 +17,7 @@ configManager.migrateFromDotEnv(path.join(__dirname, "..", ".env"));
 configManager.injectIntoProcessEnv();
 
 const DEFAULT_BASE_URL =
-  process.env.REVERSE_ENGINEER_BASE_URL || "http://localhost:3000";
+  process.env.REVERSE_ENGINEER_BASE_URL || "http://localhost:4040";
 const DEFAULT_STYLE = "blueprint";
 const DEFAULT_LANGUAGE = "Thai";
 const DEFAULT_PROVIDER = process.env.DEFAULT_PROVIDER || "openai";
@@ -29,7 +30,7 @@ function updateEnv(key, value) {
   process.env[key] = value;
 }
 
-const APP_NAME = "REVERSE ENGINEER CLI v1.0";
+const APP_NAME = "REVERSE ENGINEER CLI v1.1.6";
 const LOGO_TEXT = `
 ██████╗ ███████╗██╗   ██╗███████╗██████╗ ███████╗███████╗
 ██╔══██╗██╔════╝██║   ██║██╔════╝██╔══██╗██╔════╝██╔════╝
@@ -148,8 +149,11 @@ Options:
   );
 }
 
-async function fetchJson(url, options) {
-  const response = await fetch(url, options);
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(30000),
+    ...options
+  });
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
@@ -191,19 +195,19 @@ function summaryBox(title, content, color = "cyan") {
 
 function renderMetadata(metadata) {
   const content = [
-    `${chalk.cyan("Repo")}    : ${chalk.white(`${metadata.owner}/${metadata.repo}`)}`,
-    `${chalk.cyan("Branch")}  : ${chalk.white(metadata.branch)}`,
-    `${chalk.cyan("Type")}    : ${chalk.white(metadata.type)}`,
-    `${chalk.cyan("Path")}    : ${chalk.white(metadata.path)}`,
+    `${chalk.cyan("Repo")}    : ${chalk.white(`${metadata.owner || "URL"}/${metadata.repo || "Website"}`)}`,
+    `${chalk.cyan("Branch")}  : ${chalk.white(metadata.branch || "live")}`,
+    `${chalk.cyan("Type")}    : ${chalk.white(metadata.type || "unknown")}`,
+    `${chalk.cyan("Path")}    : ${chalk.white(metadata.path || "N/A")}`,
     `${chalk.cyan("Private")} : ${metadata.private ? chalk.red("Yes") : chalk.green("No")}`,
-    `${chalk.cyan("URL")}     : ${chalk.blue.underline(metadata.url)}`,
+    `${chalk.cyan("URL")}     : ${chalk.blue.underline(metadata.url || "")}`,
   ].join("\n");
 
   summaryBox("METADATA RECOVERY", content, "cyan");
 }
 
 function renderTree(tree) {
-  divider("REPO TREE PREVIEW", "yellow");
+  divider("REPO TREE", "yellow");
   if (!tree.length) {
     console.log(chalk.dim("   No tree entries available"));
     return;
@@ -231,24 +235,29 @@ function renderFile(file) {
   if (!file) return;
 
   divider("FILE PREVIEW", "magenta");
+  const fileSize = typeof file.size === 'number' ? `${file.size} bytes` : 'N/A';
   console.log(
-    `${chalk.magenta("Path:")} ${chalk.white(file.path)} ${chalk.dim(`(${file.size} bytes)`)}`,
+    `${chalk.magenta("Path:")} ${chalk.white(file.path || "Source")} ${chalk.dim(`(${fileSize})`)}`,
   );
 
   if (file.content) {
-    const lines = file.content.split("\n");
+    const lines = String(file.content).split("\n");
     const preview = lines.slice(0, 30).join("\n");
     const suffix =
       lines.length > 30 ? chalk.dim(`\n...(total ${lines.length} lines)`) : "";
 
-    console.log(
-      boxen(chalk.white(preview + suffix), {
-        padding: 0.5,
-        borderColor: "gray",
-        borderStyle: "single",
-        backgroundColor: "#1e1e1e",
-      }),
-    );
+    try {
+      console.log(
+        boxen(chalk.white(preview + suffix), {
+          padding: 0.2,
+          borderColor: "gray",
+          borderStyle: "single",
+          backgroundColor: "#1e1e1e",
+        }),
+      );
+    } catch(e) {
+      console.log(chalk.dim(preview + suffix));
+    }
   }
 }
 
@@ -343,7 +352,9 @@ async function handleOutputAction(content, metadata, health, githubContext) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    const baseName = `${metadata.owner}-${metadata.repo}`;
+    // Sanitize base name to remove illegal characters like | / : ? * " < >
+    const rawBase = `${metadata.owner}-${metadata.repo}`;
+    const baseName = rawBase.replace(/[\\/|:?*"<> ]/g, "-");
     const format = action.replace("save-", "");
     let filename, fileContent;
 
@@ -581,6 +592,10 @@ async function promptForMissing(args, health = {}) {
           name: `[P] Edit Prompt Templates`,
           value: "prompts",
         },
+        {
+          name: `[W] Workspace Settings`,
+          value: "workspace",
+        },
         { name: `[x] Exit`, value: "exit" },
       ],
     },
@@ -598,16 +613,40 @@ async function promptForMissing(args, health = {}) {
     return promptForMissing(args, health);
   }
 
+  if (choice === "workspace") {
+    const current = configManager.getDefaultWorkspace();
+    const { newPath } = await inquirer.prompt([
+      {
+        type: "input",
+        name: "newPath",
+        message: "Enter Absolute Path for Workspaces:",
+        default: current,
+      }
+    ]);
+    if (newPath) {
+      configManager.set("DEFAULT_WORKSPACE", newPath);
+      console.log(chalk.green(`\n${figures.tick} Workspace root set to: ${newPath}`));
+    }
+    return promptForMissing(args, health);
+  }
+
   const primaryAnswer = await inquirer.prompt([
     {
       type: "input",
       name: "url",
-      message: "Enter GitHub URL:",
-      validate: (input) => input.trim() !== "" || "URL is required",
+      message: "Enter GitHub URL or Local Path:",
+      validate: (input) => input.trim() !== "" || "URL/Path is required",
     },
   ]);
 
-  args.url = primaryAnswer.url;
+  // Basic sanitization for double-pasted URLs
+  let finalUrl = primaryAnswer.url.trim();
+  if (finalUrl.includes("http") && finalUrl.split("http").length > 2) {
+    // If double pasted like http...http..., pick the first one
+    const parts = finalUrl.split("http").filter(Boolean);
+    finalUrl = "http" + parts[0];
+  }
+  args.url = finalUrl;
 
   if (choice === "agent") {
     args.isAgentMode = true;
@@ -730,13 +769,13 @@ async function main() {
     );
 
     divider(2, "Deep Repository Extraction", "cyan");
-    const inspectSpinner = ora(
-      `Mining data from: ${chalk.blue(finalArgs.url)}`,
-    ).start();
+    const inspectSpinner = ora(`Mining data from: ${chalk.blue(finalArgs.url)}`).start();
+    global.currentSpinner = inspectSpinner;
     const githubContext = await fetchJson(
       `${finalArgs.baseUrl}/api/github/inspect?url=${encodeURIComponent(finalArgs.url)}`,
     );
     inspectSpinner.succeed(chalk.green("Data extraction complete."));
+    global.currentSpinner = null;
 
     if (finalArgs.json && finalArgs.inspectOnly) {
       console.log(JSON.stringify(githubContext, null, 2));
@@ -763,8 +802,10 @@ async function main() {
         color: "cyan",
         spinner: "bouncingBar"
       }).start();
+      global.currentSpinner = agentSpinner;
 
-      let finalContent = "";
+      let finalAnalysisResult = "";
+      let latestDraft = "";
       
       const response = await fetch(`${finalArgs.baseUrl}/api/agent/stream`, {
         method: "POST",
@@ -777,40 +818,73 @@ async function main() {
       process.stdout.write("\n");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.trim().startsWith("data: ")) continue;
-          const dataStr = line.replace("data: ", "").trim();
-          if (dataStr === "[DONE]") { agentSpinner.succeed("Agent Sandbox Loop Complete."); continue; }
+      
+      const parser = createParser({
+        onEvent: (event) => {
+          const dataStr = event.data;
+          if (!dataStr) return;
+          
+          if (dataStr === "[DONE]") { 
+            agentSpinner.succeed("Agent Sandbox Loop Complete."); 
+            return;
+          }
           
           try {
             const data = JSON.parse(dataStr);
             if (data.log) {
-               console.log(chalk.gray(`   ${data.log}`));
+               console.log(chalk.gray(`   ${figures.pointerSmall} ${data.log}`));
+            }
+            if (data.draft) {
+               latestDraft = data.draft.content || latestDraft;
+               const actionColor = data.draft.action === "replace"
+                 ? chalk.yellow
+                 : data.draft.action === "append"
+                 ? chalk.cyan
+                 : data.draft.action === "finalize"
+                 ? chalk.green
+                 : chalk.gray;
+               const headline = `${data.draft.action || "draft"}`.toUpperCase();
+               console.log(actionColor(`   ${figures.pointerSmall} [DRAFT ${headline}] ${data.draft.deltaLength || data.draft.newLength || 0} chars`));
+
+               const previewSource = data.draft.newPreview || data.draft.delta || data.draft.preview || "";
+               if (previewSource) {
+                 const previewLines = String(previewSource)
+                   .split("\n")
+                   .slice(0, 6)
+                   .map((line) => `     ${chalk.dim(line)}`)
+                   .join("\n");
+                 if (previewLines) {
+                   console.log(previewLines);
+                 }
+               }
+               if (data.draft.note) {
+                 console.log(chalk.gray(`     ${data.draft.note}`));
+               }
             }
             if (data.chunk) {
-               if(finalContent === "") {
+               if(finalAnalysisResult === "") {
+                 agentSpinner.stop(); 
                  console.log(chalk.magenta.bold(`\n${figures.star} --- ULTIMATE PROMPT GENERATED --- \n`));
                }
-               finalContent += data.chunk;
+               finalAnalysisResult += data.chunk;
                process.stdout.write(chalk.greenBright(data.chunk));
             }
           } catch(e) {}
         }
+      });
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parser.feed(decoder.decode(value, { stream: true }));
       }
       process.stdout.write("\n\n");
+      if (!finalAnalysisResult && latestDraft) {
+        finalAnalysisResult = latestDraft;
+      }
       
       divider(4, "Insight Delivery & Export", "green");
-      await handleOutputAction(finalContent, githubContext.metadata, serverHealth, githubContext);
+      await handleOutputAction(finalAnalysisResult, githubContext.metadata, serverHealth, githubContext);
       return;
     }
 
@@ -819,6 +893,7 @@ async function main() {
       text: `Syncing with code-neural networks via ${chalk.bold(serverHealth.defaultProvider)}...`,
       color: "magenta",
     }).start();
+    global.currentSpinner = analysisSpinner;
 
     let selectedProvider = finalArgs.provider || serverHealth.defaultProvider;
 
@@ -866,22 +941,13 @@ async function main() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.trim().startsWith("data: ")) continue;
-          const dataStr = line.replace("data: ", "").trim();
-          if (dataStr === "[DONE]") continue;
+      
+      const parser = createParser({
+        onEvent: (event) => {
+          if (!event.data || event.data === "[DONE]") return;
 
           try {
-            const data = JSON.parse(dataStr);
+            const data = JSON.parse(event.data);
             if (data.chunk) {
               const part = data.chunk;
               finalContent += part;
@@ -889,6 +955,12 @@ async function main() {
             }
           } catch (e) {}
         }
+      });
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parser.feed(decoder.decode(value, { stream: true }));
       }
     } else {
       analysisSpinner.text =
@@ -928,10 +1000,19 @@ async function main() {
       "green",
     );
   } catch (error) {
+    // Safety: Stop any potential global spinners if they exist
+    if (global.currentSpinner) {
+      try { global.currentSpinner.stop(); } catch(e) {}
+    }
+    
     console.error(
       chalk.red(`\n${figures.warning} Critical Error: ${error.message}`),
     );
-    process.exit(1);
+    
+    // Give Node a moment to cleanup handles before hard exit
+    setTimeout(() => {
+      process.exit(1);
+    }, 100);
   }
 }
 

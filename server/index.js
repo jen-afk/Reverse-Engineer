@@ -1,6 +1,9 @@
 const path = require("path");
 const express = require("express");
 const dotenv = require("dotenv");
+const { createParser } = require("eventsource-parser");
+const axios = require("axios");
+const cheerio = require("cheerio");
 const { SandboxAgent } = require("./agent");
 const configManager = require("../lib/configManager");
 const promptManager = require("../lib/promptManager");
@@ -11,7 +14,7 @@ configManager.injectIntoProcessEnv();
 dotenv.config();
 
 const app = express();
-const PORT = Number(process.env.PORT || 3000);
+const PORT = 4040; // Force 4040 for absolute system synchronization
 const MAX_FILE_CHARS = 12000;
 const MAX_TREE_ENTRIES = 200;
 const PROVIDER_DEFAULTS = {
@@ -209,50 +212,156 @@ async function getFileContent(owner, repo, pathName, branch) {
   };
 }
 
+/**
+ * Orchestrate the inspection of a GitHub URL
+ */
 async function inspectGitHubUrl(url) {
   const parsed = parseGitHubUrl(url);
   const repoDetails = await getRepoDetails(parsed.owner, parsed.repo);
   const branch = parsed.branch || repoDetails.default_branch;
-  const treeSha = await getBranchTreeSha(parsed.owner, parsed.repo, branch);
-  const fullTree = await getTree(parsed.owner, parsed.repo, treeSha);
 
   const context = {
     metadata: {
-      owner: parsed.owner,
-      repo: parsed.repo,
+      ...parsed,
       branch,
-      type: parsed.type,
-      path: parsed.path || "/",
-      url: parsed.url,
       private: repoDetails.private,
-      description: repoDetails.description || "",
-      defaultBranch: repoDetails.default_branch,
+      description: repoDetails.description,
     },
     tree: [],
     file: null,
   };
 
   if (parsed.type === "file") {
-    context.file = await getFileContent(parsed.owner, parsed.repo, parsed.path, branch);
-    const fileParent = path.dirname(parsed.path);
-    context.tree = summarizeTreeItems(fullTree, fileParent === "." ? "" : fileParent);
-    return context;
+    context.file = await getFileContent(
+      parsed.owner,
+      parsed.repo,
+      parsed.path,
+      branch
+    );
   }
 
-  const prefix = parsed.type === "repository" ? "" : parsed.path;
-  context.tree = summarizeTreeItems(fullTree, prefix);
+  const treeSha = await getBranchTreeSha(parsed.owner, parsed.repo, branch);
+  const fullTree = await getTree(parsed.owner, parsed.repo, treeSha);
+  context.tree = summarizeTreeItems(fullTree, parsed.path);
 
-  const readmeCandidate = fullTree.find((item) => item.path.toLowerCase() === "readme.md");
-
-  if (readmeCandidate) {
-    try {
-      context.readme = await getFileContent(parsed.owner, parsed.repo, readmeCandidate.path, branch);
-    } catch {
-      context.readme = null;
+  if (!context.file && (parsed.type === "repository" || parsed.type === "directory")) {
+    const readme = fullTree.find(
+      (item) => item.path.toLowerCase() === "readme.md"
+    );
+    if (readme) {
+      const readmeData = await fetchJson(readme.url, {
+        headers: githubHeaders(),
+      });
+      context.readme = {
+        path: readme.path,
+        content: limitText(decodeBase64(readmeData.content || "")),
+      };
     }
   }
 
   return context;
+}
+
+async function inspectLocalPath(localPath) {
+  const fullPath = path.resolve(localPath);
+  if (!fs.existsSync(fullPath)) {
+    throw new Error(`Path not found: ${localPath}`);
+  }
+
+  const isDir = fs.statSync(fullPath).isDirectory();
+  const context = {
+    metadata: {
+      owner: "local",
+      repo: path.basename(fullPath),
+      branch: "local",
+      type: isDir ? "directory" : "file",
+      path: fullPath,
+      url: `file://${fullPath}`,
+      private: true,
+      description: "Local filesystem analysis",
+    },
+    tree: [],
+    file: null,
+  };
+
+  if (!isDir) {
+    const content = fs.readFileSync(fullPath, "utf8");
+    context.file = {
+      name: path.basename(fullPath),
+      path: fullPath,
+      size: fs.statSync(fullPath).size,
+      content: limitText(content),
+    };
+    const parent = path.dirname(fullPath);
+    context.tree = fs.readdirSync(parent).slice(0, MAX_TREE_ENTRIES).map(f => ({
+      path: f,
+      type: fs.statSync(path.join(parent, f)).isDirectory() ? "tree" : "blob",
+      size: fs.statSync(path.join(parent, f)).size
+    }));
+  } else {
+    context.tree = fs.readdirSync(fullPath).slice(0, MAX_TREE_ENTRIES).map(f => ({
+      path: f,
+      type: fs.statSync(path.join(fullPath, f)).isDirectory() ? "tree" : "blob",
+      size: fs.statSync(path.join(fullPath, f)).size
+    }));
+    
+    const readme = ["README.md", "readme.md"].find(f => fs.existsSync(path.join(fullPath, f)));
+    if (readme) {
+      context.readme = {
+        path: readme,
+        content: limitText(fs.readFileSync(path.join(fullPath, readme), "utf8"))
+      };
+    }
+  }
+
+  return context;
+}
+
+async function inspectWebsiteUrl(url) {
+  try {
+    const res = await axios.get(url, { headers: { "User-Agent": "Mozilla/5.0 ReverseEngineer/1.0" } });
+    const $ = cheerio.load(res.data);
+    
+    const meta = {
+      title: $("title").text().trim() || "Website",
+      description: $('meta[name="description"]').attr("content") || "",
+      generator: $('meta[name="generator"]').attr("content") || "",
+    };
+
+    const scripts = $("script[src]").map((_, el) => $(el).attr("src")).get();
+    
+    return {
+      metadata: {
+        owner: new URL(url).hostname,
+        repo: meta.title || "Website",
+        branch: "live",
+        type: "website",
+        path: url,
+        url: url,
+        private: false,
+        description: meta.description || "Website analysis",
+      },
+      tree: scripts.map(s => ({ path: s, type: "blob", size: 0 })),
+      file: {
+          path: "index.html",
+          content: `Website: ${meta.title || "Unknown"}\nDescription: ${meta.description || "N/A"}\nScripts: ${scripts.length} detected.`,
+          size: 0
+      }
+    };
+  } catch(e) {
+    throw new Error(`Failed to inspect website: ${e.message}`);
+  }
+}
+
+async function inspectTarget(target) {
+  if (target.startsWith("http")) {
+    if (target.includes("github.com")) {
+      return inspectGitHubUrl(target);
+    } else {
+      return inspectWebsiteUrl(target);
+    }
+  }
+  return inspectLocalPath(target);
 }
 
 function buildAnalysisPrompt({
@@ -449,23 +558,27 @@ async function analyzeWithProvider(payload, onChunk = null) {
     if (isStream) {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
+      
+      const parser = createParser({
+        onEvent: (event) => {
+          if (event.type === "event") {
+            if (event.data === "[DONE]") return;
+            try {
+              const json = JSON.parse(event.data);
+              const content = json.choices[0]?.delta?.content || "";
+              if (content) {
+                outputText += content;
+                onChunk(content);
+              }
+            } catch {}
+          }
+        }
+      });
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n").filter(l => l.trim().startsWith("data: "));
-        for (const line of lines) {
-          const dataStr = line.replace("data: ", "").trim();
-          if (dataStr === "[DONE]") break;
-          try {
-            const json = JSON.parse(dataStr);
-            const content = json.choices[0]?.delta?.content || "";
-            if (content) {
-              outputText += content;
-              onChunk(content);
-            }
-          } catch {}
-        }
+        parser.feed(decoder.decode(value, { stream: true }));
       }
     } else {
       const data = await response.json();
@@ -498,15 +611,12 @@ async function analyzeWithProvider(payload, onChunk = null) {
     if (isStream) {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
+      
+      const parser = createParser({
+        onEvent: (event) => {
+          if (event.type === "event") {
             try {
-              const json = JSON.parse(line.replace("data: ", ""));
+              const json = JSON.parse(event.data);
               if (json.type === "content_block_delta") {
                 const content = json.delta?.text || "";
                 outputText += content;
@@ -515,6 +625,12 @@ async function analyzeWithProvider(payload, onChunk = null) {
             } catch {}
           }
         }
+      });
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parser.feed(decoder.decode(value, { stream: true }));
       }
     } else {
       const data = await response.json();
@@ -551,39 +667,27 @@ async function analyzeWithProvider(payload, onChunk = null) {
     if (isResponseStreaming && response.body) {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let streamFailed = false;
+      
+      const parser = createParser({
+        onEvent: (event) => {
+          if (event.type === "event") {
+            if (event.data === "[DONE]") return;
+            try {
+              const json = JSON.parse(event.data);
+              const content = json.choices[0]?.delta?.content || "";
+              if (content) {
+                outputText += content;
+                onChunk(content);
+              }
+            } catch {}
+          }
+        }
+      });
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        
-        // Check if this is actually a JSON error response instead of a stream
-        if (!done && chunk.trim().startsWith("{") && !chunk.includes("data: ")) {
-          try {
-            const json = JSON.parse(chunk);
-            outputText = extractChatCompletionText(json);
-            if (onChunk) onChunk(outputText);
-            streamFailed = true;
-            break;
-          } catch {
-            // Not JSON, continue streaming
-          }
-        }
-
-        const lines = chunk.split("\n").filter(l => l.trim().startsWith("data: "));
-        for (const line of lines) {
-          const dataStr = line.replace("data: ", "").trim();
-          if (dataStr === "[DONE]") break;
-          try {
-            const json = JSON.parse(dataStr);
-            const content = json.choices[0]?.delta?.content || "";
-            if (content) {
-              outputText += content;
-              onChunk(content);
-            }
-          } catch {}
-        }
+        parser.feed(decoder.decode(value, { stream: true }));
       }
     } else {
       // Fallback to regular JSON handling
@@ -616,7 +720,7 @@ app.get("/api/health", (_req, res) => {
 app.get("/api/github/inspect", async (req, res) => {
   try {
     const url = req.query.url;
-    const githubContext = await inspectGitHubUrl(url);
+    const githubContext = await inspectTarget(url);
     res.json(githubContext);
   } catch (error) {
     res.status(400).json({
@@ -686,9 +790,15 @@ app.post("/api/agent/stream", async (req, res) => {
             payload.url,
             (logMsg) => {
                 res.write(`data: ${JSON.stringify({ log: logMsg })}\n\n`);
+                if (res.flush) res.flush(); // Force express-compression or similar to send data immediately
             },
             (content) => {
                 res.write(`data: ${JSON.stringify({ chunk: content })}\n\n`);
+                if (res.flush) res.flush();
+          },
+          (draftUpdate) => {
+            res.write(`data: ${JSON.stringify({ draft: draftUpdate })}\n\n`);
+            if (res.flush) res.flush();
             }
         );
         res.write(`data: [DONE]\n\n`);

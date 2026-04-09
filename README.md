@@ -2,122 +2,149 @@
 
 ![REVERSE ENGINEER - AI Repository Analysis](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/title.png)
 
-> [!TIP]
-> [English Version here](README-EN.md)
+> ระบบวิเคราะห์และถอดรหัสโครงสร้างซอฟต์แวร์ด้วย AI Agent
 
-## ระบบวิเคราะห์และถอดรหัสโครงสร้าง GitHub Repository ด้วย AI
+**เวอร์ชัน:** v1.1.6  
+**รองรับแหล่งข้อมูล:** GitHub Repository, Local Path, Live Website URL
 
-**REVERSE ENGINEER** เป็นเครื่องมือระดับวิศวกรรมสำหรับวิเคราะห์และทำความเข้าใจโครงสร้างซอฟต์แวร์ที่ซับซ้อน โดยการดึงบริบทจริงจาก GitHub และใช้โมเดล AI ขั้นสูงในการประมวลผลตรรกะ ระบุรูปแบบ (Patterns) และสร้างพิมพ์เขียวทางเทคนิค (Technical Blueprints) เพื่อเป็นรากฐานในการพัฒนาหรือติดตั้งระบบใหม่
+---
+
+https://github.com/user-attachments/assets/f8d738dd-b7b0-4229-a462-a8b6bd4dae26
+
+## ภาพรวม
+
+REVERSE ENGINEER เป็นเครื่องมือวิเคราะห์สถาปัตยกรรมซอฟต์แวร์ที่ขับเคลื่อนด้วย AI Agent โดยระบบจะดึงบริบทจริงจากแหล่งข้อมูลที่กำหนด วิเคราะห์โครงสร้างโค้ด ตรวจสอบ API Endpoint และสังเคราะห์ผลลัพธ์ออกมาเป็น Technical Blueprint ที่พร้อมส่งต่อให้ AI Coding Assistant นำไปสร้างระบบได้ทันที
+
+---
+
+## สถาปัตยกรรมระบบ
+
+```
+/
+├── index.js          # Launcher หลัก — จัดการการเริ่ม/หยุด Server
+├── /cli              # Terminal User Interface (TUI) และตรรกะการทำงานของ Agent
+├── /server           # API Gateway, GitHub Fetcher, ระบบจัดการข้อมูล
+└── /public           # Web Dashboard (Bento UI)
+```
 
 ---
 
 ## คุณสมบัติหลัก
 
-### 1. Web Dashboard (Bento UI)
+### 1. Hybrid Analysis Engine
 
-- **Bento Interface**: การจัดวางข้อมูลแบบโมเดิร์นที่รวบรวมฟังก์ชันการทำงานไว้ในหน้าเดียว
-- **Cinematic Dark Mode**: ดีไซน์ระดับพรีเมียมที่ออกแบบมาเพื่อลดมลภาวะทางสายตาสำหรับการวิเคราะห์เชิงลึก
-- **Blueprint Mode**: ระบบสร้าง Technical Prompts สำหรับส่งต่อข้อมูลสถาปัตยกรรมไปยัง AI ตัวอื่นเพื่อการสร้างโค้ดที่มีความแม่นยำสูง
+ระบบรองรับการวิเคราะห์จากสามแหล่งข้อมูล:
 
-### 2. Professional 4-Phase TUI
+- **GitHub Repository** — ดึงโครงสร้างไฟล์และโค้ดผ่าน GitHub API (แนะนำให้ตั้งค่า `GITHUB_TOKEN` เพื่อเพิ่ม Rate Limit)
+- **Local Path** — วิเคราะห์ Codebase บนเครื่องโดยตรง
+- **Live Website URL** — ใช้ Playwright เปิด Browser จริงเพื่อ Render JavaScript (รองรับ SPA), ดักจับ XHR/Fetch Request และ Deobfuscate Minified JavaScript โดยอัตโนมัติ
 
-- **Structured Workflow**: ระบบการทำงานแบบ 4 ขั้นตอน ตั้งแต่การตรวจสอบระบบ (Handshake), การสกัดข้อมูล (Extraction), การวิเคราะห์เชิงลึก (Synthesis) ไปจนถึงการส่งมอบข้อมูล (Delivery)
-- **Engineering Aesthetics**: ธีมระดับพรีเมียมที่ได้รับแรงบันดาลใจจาก Claude พร้อมโลโก้ ASCII สำหรับผู้ใช้งานผ่าน Terminal
+### 2. Agent Sandbox พร้อม Working Memory
 
-### 3. Blueprint Generation (The System Architect)
+Agent ไม่ได้พึ่งพา Context Window ของโมเดลเพียงอย่างเดียว แต่ใช้ระบบ Working Memory ดังนี้:
 
-- แตกต่างจากการสรุปโค้ดทั่วไป โหมดนี้ออกแบบมาเพื่อสร้าง "ข้อกำหนดทางเทคนิค (Technical Specification)" ที่ครอบคลุมทั้งโครงสร้างข้อมูล, ตรรกะสำคัญ และความสัมพันธ์ระหว่างโมดูล
-- เหมาะสำหรับการนำพิมพ์เขียวไปใช้ใน AI Coding Assistants เพื่อจำลองระบบหรือพัฒนาต่อยอด (Re-implementation)
+- **`ANALYSIS_RESULT_DRAFT.md`** — ไฟล์ Working Memory ที่ Agent จดผลวิเคราะห์ระหว่างทำงาน โดยแต่ละ Section แยกข้อเท็จจริงที่มีหลักฐาน (`Facts`) ออกจากข้อสันนิษฐาน (`Hypotheses`) เพื่อลด Hallucination สะสม
+- **Checkpoint Reread** — ทุก 4 Turns Agent จะอ่าน Draft ย้อนกลับเพื่อตรวจสอบช่องโหว่และกำหนดสิ่งที่ต้องวิเคราะห์ต่อ
+- **`BLUEPRINT_PROMPT.md`** — ผลลัพธ์ปลายทาง Agent จะ Rewrite Draft ให้เป็น Technical Specification ที่ครอบคลุมโครงสร้างข้อมูล, Business Logic และความสัมพันธ์ระหว่างโมดูล พร้อมส่งต่อให้ Coder AI โดยตรง
 
-### 4. Unified Launcher
+Draft จะ Stream แบบ Real-time ทั้งใน TUI และ Web Dashboard
 
-- ระบบ Launcher ที่ช่วยใหเข้าถึงทั้ง Web Interface และ TUI Mode ได้ผ่านการควบคุมเดียว โดยระบบจะจัดการการทำงานของ Server ในพื้นหลังให้อัตโนมัติ
+### 3. Blueprint Generation
+
+โหมดนี้สร้าง Technical Specification ที่ระบุ:
+- โครงสร้างข้อมูลและ Data Model
+- Business Logic และ Control Flow หลัก
+- ความสัมพันธ์ระหว่างโมดูล (Module Dependency)
+- API Endpoint ที่ตรวจพบ
+
+ออกแบบมาสำหรับการนำไปใช้ใน AI Coding Assistant เพื่อ Re-implementation หรือพัฒนาต่อยอด
+
+### 4. อินเทอร์เฟซการใช้งาน
+
+**Web Dashboard (Bento UI)**
+- Cinematic Dark Mode พร้อม Bento Layout
+- แสดงผล Live Draft Streaming ระหว่าง Agent ทำงาน
+- Blueprint Mode สำหรับ Export Technical Prompt
+
+**Professional 4-Phase TUI**
+ระบบการทำงาน 4 ขั้นตอนผ่าน Terminal:
+1. **Handshake** — ตรวจสอบการเชื่อมต่อและ Permission
+2. **Extraction** — สกัดโครงสร้างและโค้ดจากแหล่งข้อมูล
+3. **Synthesis** — วิเคราะห์และสังเคราะห์สถาปัตยกรรม
+4. **Delivery** — ส่งมอบ Blueprint
 
 ---
 
-## หน้าตาของระบบ (Interface Showcase)
+## การติดตั้งและการตั้งค่า
 
-### Agent Sandbox Mode
-
-[![Agent Sandbox Mode](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/start.png)](https://github.com/user-attachments/assets/31d25731-43c8-4251-837f-fa351d8e0a26)
-
-### Web Dashboard
-
-![Web Dashboard](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/start.png)
-
-### TUI Operation
-
-![TUI Operation](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/step.png)
-
-### Analysis Result
-
-![Analysis Result](https://raw.githubusercontent.com/JonusNattapong/Reverse-Engineer/main/assets/result.png)
-
----
-
-## การเริ่มต้นใช้งาน
-
-### 1. วิธีที่เร็วที่สุด (Quick Start)
-
-สามารถรันผ่าน npx ได้ทันทีโดยไม่ต้องติดตั้ง:
+### Quick Start (ไม่ต้องติดตั้ง)
 
 ```bash
 npx blueprompt
 ```
 
-### 2. การติดตั้งแบบถาวร (Installation)
+### การติดตั้งแบบ Local
 
 ```bash
 npm install
+npm start
 ```
 
-### 3. การตั้งค่าระบบ (Configuration)
+ระบบจะเริ่มทำงานที่ `http://localhost:4040`
 
-**REVERSE ENGINEER (blueprompt)** รองรับการตั้งค่าผ่าน 2 ช่องทาง:
+### ตัวแปร Environment
 
-1.  **Persistent Config (แนะนำ)**: เมื่อรันโปรแกรมครั้งแรก ท่านสามารถเลือกเมนู `[*] Configure API Keys / Models` เพื่อบันทึก Key ลงในเครื่องอย่างถาวร (AppData) ทำให้ไม่ต้องกรอกใหม่ทุกครั้งที่เปลี่ยนโฟลเดอร์ทำงาน
-2.  **ไฟล์ .env**: หรือสร้างไฟล์ `.env` ที่ Root เพื่อระบุ API Keys:
+สร้างไฟล์ `.env` ที่ Root Directory หรือตั้งค่าผ่านเมนู `[*] Configure API Keys / Models` ใน TUI (ค่าที่บันทึกผ่านเมนูจะถูกเก็บไว้ใน AppData ถาวร ไม่ต้องกรอกซ้ำเมื่อเปลี่ยน Working Directory):
 
 ```env
 OPENAI_API_KEY=your_key_here
 ANTHROPIC_API_KEY=your_key_here
 KILOCODE_API_KEY=your_key_here
-GITHUB_TOKEN=recommended_for_higher_limits
+GITHUB_TOKEN=recommended_for_higher_rate_limits
 ```
 
-### 4. การปรับแต่ง Prompt (Prompt Customization)
+### การปรับแต่ง System Prompt
 
-ท่านสามารถแก้ไข **System Prompt** ที่ AI ใช้ในการวิเคราะห์โค้ดได้เองผ่านเมนู `[P] Edit Prompt Templates` ซึ่งจะช่วยให้ท่านควมคุมพฤติกรรมของ AI Agent ได้ตามต้องการ (เช่น สั่งให้เน้นหาบั๊ก, สั่งให้สรุปแบบสั้นๆ หรือเปลี่ยนบุคลิก AI)
+เข้าเมนู `[P] Edit Prompt Templates` เพื่อแก้ไข System Prompt ที่ Agent ใช้วิเคราะห์ เช่น กำหนดให้เน้นตรวจหา Security Vulnerability, สรุปแบบย่อ หรือปรับพฤติกรรมของ Agent ตามต้องการ
 
-### 5. การรันระบบ
+---
+
+## การใช้งานผ่าน Command Line
 
 ```bash
-npm start
+# วิเคราะห์ Repository ทั้งหมดในรูปแบบ Blueprint (ภาษาไทย)
+npm run tui -- --url "https://github.com/user/repo" --style blueprint --language Thai
+
+# วิเคราะห์ไฟล์เฉพาะด้วย Anthropic Claude
+npm run tui -- --url "https://github.com/user/repo/blob/main/file.py" \
+  --provider anthropic \
+  --model claude-3-5-sonnet-latest
+
+# รัน Agent Sandbox (สร้าง Working Draft + Blueprint แยกไฟล์)
+node cli/index.js --url "https://github.com/user/repo" --agent
 ```
 
 ---
 
-## การใช้งานขั้นสูงผ่าน CLI
+## Output Artifacts
 
-สำหรับการรันคำสั่งโดยตรงผ่าน Terminal พร้อมพารามิเตอร์:
-
-```bash
-# วิเคราะห์ทั้ง Repository ในรูปแบบ Blueprint (ภาษาไทย)
-npm run tui --url "[github-url]" --style blueprint --language Thai
-
-# เจาะจงวิเคราะห์ไฟล์ด้วย Anthropic Claude
-npm run tui --url "[github-file-url]" --provider anthropic --model claude-3-5-sonnet-latest
-```
+| ไฟล์ | คำอธิบาย |
+|---|---|
+| `ANALYSIS_RESULT_DRAFT.md` | Working Memory ที่ Agent ใช้บันทึกและแก้ไขผลวิเคราะห์ระหว่างทำงาน |
+| `BLUEPRINT_PROMPT.md` | Technical Blueprint ฉบับสมบูรณ์ พร้อมส่งต่อให้ AI สร้างระบบต่อ |
+| `SYSTEM_BLUEPRINT.md` | ไฟล์ Legacy ที่ระบบยังอ่านย้อนหลังได้ แต่ไม่ใช้เป็น Output หลักอีกต่อไป |
 
 ---
 
-## โครงสร้างโครงการ
+## ฟีเจอร์ Pro
 
-- `/cli`: ตรรกะและอินเทอร์เฟซผู้ใช้งานผ่าน Terminal
-- `/server`: API Gateway และระบบการจัดการข้อมูลจาก GitHub
-- `/public`: ระบบแสดงผลหน้าเว็บ (Dashboard)
-- `index.js`: ระบบ Launcher หลัก
+| ฟีเจอร์ | รายละเอียด |
+|---|---|
+| Persistent Workspace | กำหนด Working Directory ถาวรผ่านเมนู `[W]` |
+| Full Terminal Access | Agent สั่งรัน Shell Command ใน Workspace เพื่อวิเคราะห์เชิงลึก |
+| Browser Automation | Playwright ควบคุม Browser จริงสำหรับ SPA และ API Sniffing |
+| JS Deobfuscation | จัดรูปแบบ Minified JavaScript อัตโนมัติก่อนส่งให้ AI วิเคราะห์ |
 
 ---
 
-© 2026 REVERSE ENGINEER | Engineered for Architects and Security Researchers.
+© 2026 REVERSE ENGINEER | Engineered for Architects and Security Researchers

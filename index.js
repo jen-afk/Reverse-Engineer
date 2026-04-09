@@ -48,15 +48,15 @@ async function main() {
 
     console.log(chalk.cyan(`${figures.info} Waiting for API Gateway to become ready...`));
 
-    // Health check loop — wait up to 10 seconds
-    const maxWait = 10000;
-    const interval = 500;
+    // Health check loop — wait up to 30 seconds
+    const maxWait = 30000;
+    const interval = 1000; // Check every 1s instead of 0.5s to reduce noise
     let elapsed = 0;
     let serverReady = false;
 
     while (elapsed < maxWait) {
       try {
-        const res = await fetch("http://localhost:3000/api/health");
+        const res = await fetch("http://localhost:4040/api/health");
         if (res.ok) { serverReady = true; break; }
       } catch {}
       await new Promise(r => setTimeout(r, interval));
@@ -64,7 +64,7 @@ async function main() {
     }
 
     if (!serverReady) {
-      console.error(chalk.red(`${figures.cross} API Gateway failed to start within ${maxWait / 1000}s. Port may be in use.`));
+      console.error(chalk.red(`${figures.cross} API Gateway failed to start within ${maxWait / 1000}s. Check server/index.js for errors.`));
       server.kill();
       process.exit(1);
     }
